@@ -1,24 +1,28 @@
-import { pgTable, text, timestamp, primaryKey, integer } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, primaryKey, integer, boolean } from 'drizzle-orm/pg-core';
 import type { AdapterAccount } from '@auth/core/adapters';
 
-export const users = pgTable('users', {
+export const user = pgTable('user', {
   id: text('id').primaryKey(),
   name: text('name'),
+  firstName: text('firstName'),
+  lastName: text('lastName'),
   email: text('email').unique(),
-  emailVerified: timestamp('email_verified', { mode: 'date' }),
+  emailVerified: timestamp('emailVerified', { mode: 'date' }),
   image: text('image'),
-  hashedPassword: text('hashed_password')
+  hashedPassword: text('hashedPassword'),
+  role: text('role').notNull().default('user'),
+  disabled: boolean('disabled').notNull().default(false)
 });
 
-export const accounts = pgTable(
-  'accounts',
+export const account = pgTable(
+  'account',
   {
-    userId: text('user_id')
+    userId: text('userId')
       .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+      .references(() => user.id, { onDelete: 'cascade' }),
     type: text('type').$type<AdapterAccount['type']>().notNull(),
     provider: text('provider').notNull(),
-    providerAccountId: text('provider_account_id').notNull(),
+    providerAccountId: text('providerAccountId').notNull(),
     refresh_token: text('refresh_token'),
     access_token: text('access_token'),
     expires_at: integer('expires_at'),
@@ -32,16 +36,16 @@ export const accounts = pgTable(
   })
 );
 
-export const sessions = pgTable('sessions', {
-  sessionToken: text('session_token').primaryKey(),
-  userId: text('user_id')
+export const session = pgTable('session', {
+  sessionToken: text('sessionToken').primaryKey(),
+  userId: text('userId')
     .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+    .references(() => user.id, { onDelete: 'cascade' }),
   expires: timestamp('expires', { mode: 'date' }).notNull()
 });
 
-export const verificationTokens = pgTable(
-  'verification_tokens',
+export const verificationToken = pgTable(
+  'verification_token',
   {
     identifier: text('identifier').notNull(),
     token: text('token').notNull(),
@@ -51,3 +55,8 @@ export const verificationTokens = pgTable(
     pk: primaryKey({ columns: [t.identifier, t.token] })
   })
 );
+
+// Backwards-compat aliases (optional)
+export const users = user;
+export const sessions = session;
+export const verificationTokens = verificationToken;

@@ -1,14 +1,16 @@
 import { SvelteKitAuth } from '@auth/sveltekit';
 import Credentials from '@auth/core/providers/credentials';
+import Google from '@auth/core/providers/google';
+import GitHub from '@auth/core/providers/github';
 import { DrizzleAdapter } from '@auth/drizzle-adapter';
 import { db } from '$lib/server/db';
-import { users, accounts, sessions, verificationTokens } from '$lib/server/db/schema';
+import { user, account, session, verificationToken } from '$lib/server/db/schema';
 import { env } from '$env/dynamic/private';
 import { eq } from 'drizzle-orm';
 import { compare } from 'bcryptjs';
 
 export const authOptions = {
-    adapter: DrizzleAdapter(db),
+    adapter: DrizzleAdapter(db, { user, account, session, verificationToken } as any),
   trustHost: true,
   secret: env.AUTH_SECRET,
   session: { strategy: 'database' as const },
@@ -23,14 +25,24 @@ export const authOptions = {
         const password = credentials?.password?.toString() ?? '';
         if (!email || !password) return null;
 
-        const [user] = await db.select().from(users).where(eq(users.email, email));
-        if (!user || !user.hashedPassword) return null;
+        const [u] = await db.select().from(user).where(eq(user.email, email));
+        if (!u || !u.hashedPassword) return null;
+        if (u.disabled) return null;
 
-        const ok = await compare(password, user.hashedPassword);
+        const ok = await compare(password, u.hashedPassword);
         if (!ok) return null;
 
-        return { id: user.id, name: user.name ?? null, email: user.email ?? null, image: user.image ?? null };
+        return { id: u.id, name: u.name ?? null, email: u.email ?? null, image: u.image ?? null };
       }
+    })
+    ,
+    Google({
+      clientId: env.AUTH_GOOGLE_ID,
+      clientSecret: env.AUTH_GOOGLE_SECRET
+    }),
+    GitHub({
+      clientId: env.AUTH_GITHUB_ID,
+      clientSecret: env.AUTH_GITHUB_SECRET
     })
   ],
   pages: { signIn: '/login' }

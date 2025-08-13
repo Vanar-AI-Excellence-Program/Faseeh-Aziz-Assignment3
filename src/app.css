@@ -1,47 +1,55 @@
-@import 'tailwindcss';
-@plugin '@tailwindcss/forms';
-@plugin '@tailwindcss/typography';
+@import "tailwindcss";
 
-/* Base theme and reusable UI primitives */
-@layer base {
-  :root {
-    --brand-50: 238 242 255; /* indigo-50 */
-    --brand-100: 224 231 255;
-    --brand-200: 199 210 254;
-    --brand-300: 165 180 252;
-    --brand-400: 129 140 248;
-    --brand-500: 99 102 241;
-    --brand-600: 79 70 229;
-    --brand-700: 67 56 202;
-    --brand-800: 55 48 163;
-    --brand-900: 49 46 129;
-  }
+/* Base utility layer is provided by Tailwind v4.
+   Below are your reusable component classes. */
+
+.btn {
+  @apply inline-flex items-center justify-center px-5 py-2.5 text-sm font-semibold rounded-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500;
+}
+.btn-primary {
+  @apply text-white bg-indigo-600 hover:brightness-110 cursor-pointer;
+}
+.btn-outline {
+  @apply text-gray-800 border border-gray-300 bg-white hover:bg-white hover:shadow-md cursor-pointer;
+}
+.btn-soft {
+  @apply text-indigo-700 bg-indigo-50 ring-1 ring-inset ring-indigo-100 hover:bg-indigo-100 cursor-pointer;
 }
 
-@layer components {
-  .container {
-    @apply mx-auto max-w-6xl px-4;
-  }
+.card {
+  @apply rounded-2xl border border-gray-200/60 bg-white/80 p-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60;
+}
+.pill {
+  @apply whitespace-nowrap rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700;
+}
 
-  .card {
-    @apply rounded-lg border bg-white p-6 shadow-sm;
-  }
+/* Form controls */
+.input {
+  @apply w-full rounded-xl border border-gray-300/80 bg-white px-4 py-3 text-sm shadow-sm outline-none transition;
+  @apply focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500;
+}
 
-  .btn-primary {
-    @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors bg-indigo-600 text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500;
-  }
-  .btn-outline {
-    @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors border hover:bg-gray-50;
-  }
-  .btn-muted {
-    @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors bg-gray-100 text-gray-900 hover:bg-gray-200;
-  }
+/* ---------- Page Themes ---------- */
+/* Set with: data-theme="marketing" | "dashboard" */
 
-  .label { @apply text-sm font-medium; }
-  .input {
-    @apply w-full rounded-md border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500;
-  }
-  .muted { @apply text-gray-600; }
+[data-theme="marketing"] .btn-primary {
+  @apply bg-gradient-to-r from-indigo-600 to-fuchsia-600 shadow-lg shadow-indigo-600/20;
+}
+[data-theme="marketing"] .btn-outline {
+  @apply ring-1 ring-inset ring-indigo-100;
+}
 
-  .nav-link { @apply text-sm text-gray-700 hover:text-gray-900 hover:underline; }
+[data-theme="dashboard"] .btn-primary {
+  @apply bg-emerald-600 hover:bg-emerald-700;
+}
+[data-theme="dashboard"] .btn-outline {
+  @apply border-emerald-200 text-emerald-800;
+}
+
+/* Ambient hero blobs (optional helpers) */
+.hero-blob-a {
+  @apply absolute -top-32 -left-24 h-72 w-72 rounded-full bg-gradient-to-tr from-indigo-500/30 to-purple-500/30 blur-3xl;
+}
+.hero-blob-b {
+  @apply absolute -bottom-28 -right-24 h-80 w-80 rounded-full bg-gradient-to-tr from-fuchsia-500/25 to-sky-500/25 blur-3xl;
 }

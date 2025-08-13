@@ -16,6 +16,7 @@ export const actions: Actions = {
 
     const [user] = await db.select().from(users).where(eq(users.email, email));
     if (!user || !user.hashedPassword) return fail(400, { message: 'Invalid credentials.' });
+    if (user.disabled) return fail(403, { message: 'Account is disabled.' });
 
     const ok = await compare(password, user.hashedPassword);
     if (!ok) return fail(400, { message: 'Invalid credentials.' });
@@ -34,6 +35,8 @@ export const actions: Actions = {
       expires
     });
 
-    throw redirect(303, '/dashboard');
+    // Redirect based on role
+    const destination = user.role === 'admin' ? '/dashboard' : '/user';
+    throw redirect(303, destination);
   }
 };
