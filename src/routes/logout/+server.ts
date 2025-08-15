@@ -1,24 +1,24 @@
 import type { RequestHandler } from '@sveltejs/kit';
-import { db } from '$lib/server/db';
-import { sessions } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
-
-async function signOut(cookies: import('@sveltejs/kit').Cookies) {
-  const token = cookies.get('authjs.session-token');
-  if (token) {
-    await db.delete(sessions).where(eq(sessions.sessionToken, token));
-    cookies.delete('authjs.session-token', { path: '/' });
-  }
-}
+import { redirect } from '@sveltejs/kit';
 
 export const POST: RequestHandler = async ({ cookies }) => {
-  await signOut(cookies);
-  return new Response(null, { status: 303, headers: { Location: '/login' } });
+  // Clear the session cookie
+  cookies.delete('authjs.session-token', { path: '/' });
+  cookies.delete('authjs.csrf-token', { path: '/' });
+  cookies.delete('authjs.callback-url', { path: '/' });
+  
+  // Redirect to login page
+  throw redirect(303, '/login');
 };
 
 export const GET: RequestHandler = async ({ cookies }) => {
-  await signOut(cookies);
-  return new Response(null, { status: 303, headers: { Location: '/login' } });
+  // Clear the session cookie
+  cookies.delete('authjs.session-token', { path: '/' });
+  cookies.delete('authjs.csrf-token', { path: '/' });
+  cookies.delete('authjs.callback-url', { path: '/' });
+  
+  // Redirect to login page
+  throw redirect(303, '/login');
 };
 
 

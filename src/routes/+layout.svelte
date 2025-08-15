@@ -29,7 +29,7 @@
         <!-- Nav -->
         <nav class="flex items-center gap-2 md:gap-4">
           {#if $page.data.viewer}
-            {#if $page.data.viewer.role === 'admin'}
+            {#if ($page.data.viewer as any)?.role === 'admin'}
               <a href="/dashboard" class="nav-link">Dashboard</a>
             {/if}
             <a href="/settings" class="nav-link">Settings</a>
