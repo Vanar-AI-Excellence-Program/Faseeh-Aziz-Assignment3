@@ -10,7 +10,7 @@ import { eq } from 'drizzle-orm';
 import { compare } from 'bcryptjs';
 
 export const authOptions = {
-    adapter: DrizzleAdapter(db, { user, account, session, verificationToken } as any),
+  adapter: DrizzleAdapter(db, { user, account, session, verificationToken } as any),
   trustHost: true,
   secret: env.AUTH_SECRET,
   session: { strategy: 'database' as const },
@@ -32,19 +32,38 @@ export const authOptions = {
         const ok = await compare(password, u.hashedPassword);
         if (!ok) return null;
 
-        return { id: u.id, name: u.name ?? null, email: u.email ?? null, image: u.image ?? null };
+        return { 
+          id: u.id, 
+          name: u.name ?? null, 
+          email: u.email ?? null, 
+          image: u.image ?? null,
+          role: u.role 
+        };
       }
-    })
-    ,
+    }),
     Google({
       clientId: env.AUTH_GOOGLE_ID,
-      clientSecret: env.AUTH_GOOGLE_SECRET
+      clientSecret: env.AUTH_GOOGLE_SECRET,
+      authorization: {
+        params: {
+          prompt: 'select_account'
+        }
+      }
     }),
     GitHub({
       clientId: env.AUTH_GITHUB_ID,
       clientSecret: env.AUTH_GITHUB_SECRET
     })
   ],
+  callbacks: {
+    async session({ session, user }: { session: any; user: any }) {
+      if (session.user) {
+        session.user.id = user.id;
+        session.user.role = user.role;
+      }
+      return session;
+    }
+  },
   pages: { signIn: '/login' }
 };
 

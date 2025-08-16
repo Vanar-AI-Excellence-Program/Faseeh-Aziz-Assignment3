@@ -1,52 +1,95 @@
 <script lang="ts">
-  export let data: { me: { id: string; email: string | null; name: string | null } };
+  import { page } from '$app/stores';
+  import AdminGuard from '$lib/components/AdminGuard.svelte';
+  
+  export let data: {
+    user: { name?: string | null; email?: string | null; role?: string | null };
+  };
 </script>
 
-<div class="mx-auto max-w-md">
-  <h1 class="mb-2 text-2xl font-semibold">Settings</h1>
-  <p class="mb-6 text-sm text-gray-600">Manage your profile and password.</p>
+<AdminGuard>
+  <div class="mx-auto max-w-4xl space-y-6">
+    <div class="card">
+      <h1 class="mb-2 text-2xl font-semibold">Admin Settings</h1>
+      <p class="text-sm text-gray-600">Manage system settings and user permissions</p>
+    </div>
 
-  <div class="card p-6">
-    <form method="POST" action="?/update" class="space-y-6">
-      <div class="grid gap-3 md:grid-cols-2">
-        <div class="space-y-2">
-          <label class="text-sm font-medium">First name</label>
-          <input class="input" type="text" name="firstName" value={data.me.firstName ?? ''} placeholder="John" />
-        </div>
-        <div class="space-y-2">
-          <label class="text-sm font-medium">Last name</label>
-          <input class="input" type="text" name="lastName" value={data.me.lastName ?? ''} placeholder="Doe" />
-        </div>
-      </div>
-      <div class="space-y-2">
-        <label class="text-sm font-medium">Username</label>
-        <input class="input" type="text" name="name" value={data.me.name ?? ''} placeholder="username" />
-      </div>
-      <div class="space-y-2">
-        <label class="text-sm font-medium">Email</label>
-        <input class="input" type="email" value={data.me.email ?? ''} disabled />
+    <div class="grid gap-6 md:grid-cols-2">
+      <!-- User Management -->
+      <div class="card">
+        <h2 class="mb-3 text-lg font-semibold">User Management</h2>
+        <p class="text-sm text-gray-600 mb-4">Manage user roles and account status</p>
+        <a href="/dashboard" class="btn btn-primary">
+          Go to User Dashboard
+        </a>
       </div>
 
-      <div class="grid gap-3 md:grid-cols-3">
-        <div class="space-y-2">
-          <label class="text-sm font-medium">Current password</label>
-          <input class="input" type="password" name="current" placeholder="••••••••" />
-        </div>
-        <div class="space-y-2">
-          <label class="text-sm font-medium">New password</label>
-          <input class="input" type="password" name="next" placeholder="At least 8 characters" />
-        </div>
-        <div class="space-y-2">
-          <label class="text-sm font-medium">Confirm new password</label>
-          <input class="input" type="password" name="confirm" placeholder="Re-enter new password" />
+      <!-- System Information -->
+      <div class="card">
+        <h2 class="mb-3 text-lg font-semibold">System Information</h2>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-gray-600">Current User:</span>
+            <span class="font-medium">{data.user.email}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-600">Role:</span>
+            <span class="font-medium">{data.user.role}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-600">Name:</span>
+            <span class="font-medium">{data.user.name || 'Not set'}</span>
+          </div>
         </div>
       </div>
 
-      <div class="flex justify-center">
-        <button class="btn btn-primary rounded-full px-4 py-2 text-sm">Save changes</button>
+      <!-- Quick Actions -->
+      <div class="card">
+        <h2 class="mb-3 text-lg font-semibold">Quick Actions</h2>
+        <div class="space-y-2">
+          <a href="/dashboard" class="block text-blue-600 hover:text-blue-800 text-sm">
+            → View all users
+          </a>
+          <a href="/user" class="block text-blue-600 hover:text-blue-800 text-sm">
+            → User profile
+          </a>
+          <a href="/logout" class="block text-red-600 hover:text-red-800 text-sm">
+            → Sign out
+          </a>
+        </div>
       </div>
-    </form>
+
+      <!-- Security -->
+      <div class="card">
+        <h2 class="mb-3 text-lg font-semibold">Security</h2>
+        <p class="text-sm text-gray-600 mb-4">Admin account security settings</p>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-gray-600">Account Status:</span>
+            <span class="text-green-600 font-medium">Active</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-600">Last Login:</span>
+            <span class="font-medium">Recent</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin Notes -->
+    <div class="card">
+      <h2 class="mb-3 text-lg font-semibold">Admin Notes</h2>
+      <div class="prose prose-sm max-w-none">
+        <ul class="list-disc list-inside space-y-1 text-gray-600">
+          <li>Use the dashboard to manage user roles and account status</li>
+          <li>Users with 'admin' role can access this page and the dashboard</li>
+          <li>Disabled users cannot log in until re-enabled</li>
+          <li>Admins cannot modify their own account status or demote themselves</li>
+          <li>All changes are logged and can be reviewed in the database</li>
+        </ul>
+      </div>
+    </div>
   </div>
-</div>
+</AdminGuard>
 
 
