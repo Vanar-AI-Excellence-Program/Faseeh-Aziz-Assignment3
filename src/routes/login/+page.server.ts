@@ -1,13 +1,35 @@
-import type { Actions } from './$types';
+import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
-import { users } from '$lib/server/db/schema';
+import { users, session } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { compare } from 'bcryptjs';
 import { fail, redirect } from '@sveltejs/kit';
-import { signIn } from '../../auth';
+
+export const load: PageServerLoad = async ({ url, locals }) => {
+  // Check if user is already authenticated
+  const session = await locals.auth();
+  if (session?.user) {
+    const dest = (session.user as any).role === 'admin' ? '/dashboard' : '/user';
+    throw redirect(303, dest);
+  }
+
+  // Handle other Auth.js errors if needed
+  const error = url.searchParams.get('error');
+  if (error && error !== 'OAuthAccountExists') {
+    return {
+      error: {
+        type: 'auth_error',
+        message: 'An error occurred during sign in. Please try again.',
+        provider: null
+      }
+    };
+  }
+  
+  return {};
+};
 
 export const actions: Actions = {
-  default: async ({ request }) => {
+  default: async ({ request, cookies }) => {
     const data = await request.formData();
     const email = String(data.get('email') ?? '').trim().toLowerCase();
     const password = String(data.get('password') ?? '');
@@ -21,11 +43,28 @@ export const actions: Actions = {
     const ok = await compare(password, user.hashedPassword);
     if (!ok) return fail(400, { message: 'Invalid credentials.' });
 
-    // Use Auth.js signIn for credentials
-    return await signIn('credentials', {
-      email,
-      password,
-      redirect: false
+    // Create a session token manually for now
+    const sessionToken = crypto.randomUUID();
+    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+    
+    // Insert session into database
+    await db.insert(session).values({
+      sessionToken,
+      userId: user.id,
+      expires
     });
+
+    // Set the session cookie
+    cookies.set('authjs.session-token', sessionToken, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      expires
+    });
+
+    // Redirect based on user role
+    const destination = user.role === 'admin' ? '/dashboard' : '/user';
+    throw redirect(303, destination);
   }
 };
