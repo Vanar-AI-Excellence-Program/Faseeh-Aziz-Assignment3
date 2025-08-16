@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import AdminGuard from '$lib/components/AdminGuard.svelte';
+  import { handleLogout } from '$lib/auth/logout';
   
   export let data: {
     user: { name?: string | null; email?: string | null; role?: string | null };
@@ -53,9 +54,12 @@
           <a href="/user" class="block text-blue-600 hover:text-blue-800 text-sm">
             → User profile
           </a>
-          <a href="/logout" class="block text-red-600 hover:text-red-800 text-sm">
+          <button 
+            on:click={handleLogout}
+            class="block text-red-600 hover:text-red-800 text-sm text-left w-full"
+          >
             → Sign out
-          </a>
+          </button>
         </div>
       </div>
 

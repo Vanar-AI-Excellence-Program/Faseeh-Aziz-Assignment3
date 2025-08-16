@@ -2,6 +2,7 @@
   import "../app.css";
   import favicon from "$lib/assets/favicon.svg";
   import { page } from "$app/stores";
+  import { handleLogout } from "$lib/auth/logout";
 
   // Svelte 5: children passed via $props()
   const { children } = $props();
@@ -33,9 +34,12 @@
               <a href="/dashboard" class="nav-link">Dashboard</a>
             {/if}
             <a href="/settings" class="nav-link">Settings</a>
-            <form method="POST" action="/logout">
-              <button class="btn-outline rounded-full px-3 py-1.5 text-sm cursor-pointer">Logout</button>
-            </form>
+            <button 
+              on:click={handleLogout}
+              class="btn-outline rounded-full px-3 py-1.5 text-sm cursor-pointer"
+            >
+              Logout
+            </button>
           {:else}
             <a href="/login" class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer">Login</a>
             <a href="/register" class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer">Register</a>

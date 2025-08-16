@@ -1,5 +1,5 @@
 // src/routes/auth/[...path]/+server.ts
-import { SvelteKitAuth } from '@auth/sveltekit';
-import { authOptions } from '../../../auth';
+import { handle } from '../../../auth';
 
-export const { GET, POST } = SvelteKitAuth(authOptions);
+export const GET = handle;
+export const POST = handle;
