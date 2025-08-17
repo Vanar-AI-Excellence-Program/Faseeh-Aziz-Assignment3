@@ -78,6 +78,7 @@ export const authOptions = {
         const [u] = await db.select().from(user).where(eq(user.email, email.toLowerCase()));
         if (!u) throw new Error("Invalid credentials");
         if (u.disabled) throw new Error("Account disabled");
+        if (!u.emailVerified) throw new Error("Email not verified");
 
         // Check if user has a password (credentials account)
         if (!u.hashedPassword) throw new Error("Invalid credentials");

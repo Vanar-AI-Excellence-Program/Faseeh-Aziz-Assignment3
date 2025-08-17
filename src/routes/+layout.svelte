@@ -35,7 +35,7 @@
             {/if}
             <a href="/settings" class="nav-link">Settings</a>
             <button 
-              on:click={handleLogout}
+              onclick={handleLogout}
               class="btn-outline rounded-full px-3 py-1.5 text-sm cursor-pointer"
             >
               Logout

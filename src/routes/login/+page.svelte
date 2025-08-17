@@ -33,12 +33,12 @@
         <input type="hidden" name="provider" value="credentials" />
         <input type="hidden" name="redirectTo" value="/dashboard" />
         <div class="space-y-2">
-          <label class="text-sm font-medium">Email</label>
-          <input class="input" type="email" name="email" placeholder="you@example.com" required />
+          <label class="text-sm font-medium" for="loginEmail">Email</label>
+          <input class="input" id="loginEmail" type="email" name="email" placeholder="you@example.com" required />
         </div>
         <div class="space-y-2">
-          <label class="text-sm font-medium">Password</label>
-          <input class="input" type="password" name="password" placeholder="••••••••" required />
+          <label class="text-sm font-medium" for="loginPassword">Password</label>
+          <input class="input" id="loginPassword" type="password" name="password" placeholder="••••••••" required />
         </div>
         <div class="flex justify-center">
           <button class="btn btn-primary rounded-full px-4 py-2 text-sm">Sign in</button>
