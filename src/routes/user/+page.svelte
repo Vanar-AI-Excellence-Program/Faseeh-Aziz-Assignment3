@@ -1,5 +1,6 @@
 <script lang="ts">
   export let data: { name: string };
+  import ChatPopup from '$lib/components/ChatPopup.svelte';
 </script>
 
 <div class="mx-auto max-w-3xl">
@@ -12,4 +13,5 @@
   </div>
 </div>
 
+<ChatPopup title="Assistant" placeholder="Ask about your account..." />
 
