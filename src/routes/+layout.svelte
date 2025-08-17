@@ -36,6 +36,7 @@
             >
               Dashboard
             </a>
+            <a href="/chat" class="nav-link">Chat</a>
             <a href="/settings" class="nav-link">Settings</a>
             <button 
               onclick={handleLogout}
