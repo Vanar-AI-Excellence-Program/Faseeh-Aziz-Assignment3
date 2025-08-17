@@ -6,8 +6,37 @@ import { GOOGLE_GENERATIVE_AI_API_KEY as STATIC_GEMINI_API_KEY } from '$env/stat
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   try {
-    const body = await request.json().catch(() => ({ messages: [] }));
-    const messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = body.messages ?? [];
+    const contentType = request.headers.get('content-type') || '';
+    let messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
+    let fileContent = '';
+
+    if (contentType.includes('multipart/form-data')) {
+      // Handle file upload
+      const formData = await request.formData();
+      const messagesStr = formData.get('messages') as string;
+      const file = formData.get('file') as File;
+      
+      if (messagesStr) {
+        messages = JSON.parse(messagesStr);
+      }
+      
+      if (file) {
+        if (file.type.startsWith('text/') || file.name.endsWith('.txt')) {
+          fileContent = await file.text();
+        } else {
+          fileContent = `[File uploaded: ${file.name} (${file.type}, ${file.size} bytes)]`;
+        }
+        
+        // Add file content to the last user message
+        if (messages.length > 0 && messages[messages.length - 1].role === 'user') {
+          messages[messages.length - 1].content += `\n\nAttached file: ${fileContent}`;
+        }
+      }
+    } else {
+      // Handle JSON
+      const body = await request.json().catch(() => ({ messages: [] }));
+      messages = body.messages ?? [];
+    }
 
     const apiKey =
       STATIC_GEMINI_API_KEY ||
@@ -39,7 +68,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       model,
       messages,
       system:
-        'You are an assistant for a SvelteKit app. Provide concise, helpful answers. If asked about the app, you can reference settings, dashboard, and authentication features.',
+        'You are a helpful AI assistant. Provide concise, accurate, and helpful responses to any questions or requests. Be conversational and friendly.',
     });
 
     const stream = result.toAIStreamResponse();
