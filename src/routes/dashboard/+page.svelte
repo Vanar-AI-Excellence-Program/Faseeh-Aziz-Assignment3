@@ -1,4 +1,11 @@
 <script lang="ts">
+  import ChatPopup from '$lib/components/ChatPopup.svelte';
+</script>
+
+<!-- existing dashboard content remains below -->
+
+<ChatPopup title="Admin Assistant" placeholder="Ask about admin features..." />
+<script lang="ts">
   import { enhance } from '$app/forms';
   import { page } from '$app/stores';
   
