@@ -66,6 +66,6 @@ export const actions: Actions = {
     });
 
     // Redirect based on user role
-    throw redirect(303, '/user');
+    throw redirect(303, user.role === 'admin' ? '/dashboard' : '/user');
   }
 };

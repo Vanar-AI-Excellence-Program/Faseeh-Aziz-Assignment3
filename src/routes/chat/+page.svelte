@@ -17,6 +17,8 @@
   let fileInput: HTMLInputElement;
   let uploadedFile: File | null = null;
   let sidebarOpen = true;
+  let renamingChatId: string | null = null;
+  let renameInput = '';
 
   // Auto-scroll to bottom
   let messagesContainer: HTMLDivElement;
@@ -220,6 +222,29 @@
   function toggleSidebar() {
     sidebarOpen = !sidebarOpen;
   }
+
+  function startRename(c: Chat) {
+    renamingChatId = c.id;
+    renameInput = c.title;
+  }
+
+  async function confirmRename(c: Chat) {
+    const title = renameInput.trim();
+    renamingChatId = null;
+    if (!title || c.title === title) return;
+
+    c.title = title;
+    chats = chats.map((x) => (x.id === c.id ? { ...x, title } : x));
+    saveChatsToStorage();
+
+    try {
+      await fetch('/api/chat/rename', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: c.id, title })
+      });
+    } catch {}
+  }
 </script>
 
 <div class="flex h-screen bg-white">
@@ -245,13 +270,34 @@
           }`}
           onclick={() => selectChat(chat)}
         >
-          <div class="text-sm font-medium truncate">{chat.title}</div>
+          {#if renamingChatId === chat.id}
+            <input
+              class="text-sm font-medium w-full bg-white border border-indigo-300 rounded px-2 py-1"
+              bind:value={renameInput}
+              onkeydown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); confirmRename(chat); }
+                else if (e.key === 'Escape') { renamingChatId = null; }
+              }}
+              onblur={() => confirmRename(chat)}
+              autofocus
+            />
+          {:else}
+            <div class="text-sm font-medium truncate">{chat.title}</div>
+          {/if}
           <div class="text-xs text-gray-500 mt-1">{chat.createdAt.toLocaleDateString()}</div>
           <button
             onclick={(e) => { e.stopPropagation(); deleteChat(chat.id); }}
-            class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 text-xs"
+            class="absolute top-2 right-2 text-red-500 hover:text-red-700 text-xs"
+            aria-label="Delete chat"
           >
             ✕
+          </button>
+          <button
+            onclick={(e) => { e.stopPropagation(); startRename(chat); }}
+            class="absolute top-2 right-8 text-gray-500 hover:text-gray-700 text-xs"
+            aria-label="Rename chat"
+          >
+            ✎
           </button>
         </div>
       {/each}
