@@ -39,6 +39,7 @@
         <div class="space-y-2">
           <label class="text-sm font-medium" for="loginPassword">Password</label>
           <input class="input" id="loginPassword" type="password" name="password" placeholder="••••••••" required />
+
         </div>
         <div class="flex justify-center">
           <button class="btn btn-primary rounded-full px-4 py-2 text-sm">Sign in</button>

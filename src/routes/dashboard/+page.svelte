@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ChatPopup from '$lib/components/ChatPopup.svelte';
   import { enhance } from '$app/forms';
   import { page } from '$app/stores';
   
@@ -75,14 +76,14 @@
               <td class="py-2">
                 <div class="flex gap-2">
                   <button 
-                    on:click={() => openRoleModal(u)}
+                    onclick={() => openRoleModal(u)}
                     class="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 disabled:opacity-50"
                     disabled={u.id === data.user.id}
                   >
                     Change Role
                   </button>
                   <button 
-                    on:click={() => openStatusModal(u)}
+                    onclick={() => openStatusModal(u)}
                     class="text-xs {u.disabled ? 'bg-green-500' : 'bg-red-500'} text-white px-2 py-1 rounded hover:opacity-80 disabled:opacity-50"
                     disabled={u.id === data.user.id}
                   >
@@ -116,7 +117,7 @@
           </div>
           
           <div class="flex gap-3 justify-end">
-            <button type="button" on:click={closeModals} class="px-4 py-2 text-gray-600 hover:text-gray-800">
+            <button type="button" onclick={closeModals} class="px-4 py-2 text-gray-600 hover:text-gray-800">
               Cancel
             </button>
             <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
@@ -150,7 +151,7 @@
           </div>
           
           <div class="flex gap-3 justify-end">
-            <button type="button" on:click={closeModals} class="px-4 py-2 text-gray-600 hover:text-gray-800">
+            <button type="button" onclick={closeModals} class="px-4 py-2 text-gray-600 hover:text-gray-800">
               Cancel
             </button>
             <button 
@@ -179,3 +180,5 @@
     </div>
   {/if}
 </div>
+
+<ChatPopup title="Admin Assistant" placeholder="Ask about admin features..." />

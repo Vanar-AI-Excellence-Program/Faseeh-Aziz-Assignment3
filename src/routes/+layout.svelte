@@ -30,9 +30,13 @@
         <!-- Nav -->
         <nav class="flex items-center gap-2 md:gap-4">
           {#if $page.data.viewer}
-            {#if ($page.data.viewer as any)?.role === 'admin'}
-              <a href="/dashboard" class="nav-link">Dashboard</a>
-            {/if}
+            <a 
+              href="/post-auth" 
+              class="btn btn-primary rounded-full px-3 py-1.5 text-sm"
+            >
+              Dashboard
+            </a>
+            <a href="/chat" class="nav-link">Chat</a>
             <a href="/settings" class="nav-link">Settings</a>
             <button 
               onclick={handleLogout}
