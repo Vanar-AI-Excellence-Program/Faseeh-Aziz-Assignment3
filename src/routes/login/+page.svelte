@@ -1,5 +1,8 @@
 <script lang="ts">
+  import { page } from '$app/stores';
   export let data: { error?: { type: string; message: string; provider: string | null } };
+  let formMessage: string | undefined;
+  $: formMessage = (/** @type {any} */ ($page))?.form?.message as string | undefined;
 </script>
 
 <section class="mx-auto flex max-w-5xl justify-center px-4 py-16 md:px-6 lg:px-8 lg:py-20">
@@ -26,6 +29,13 @@
       </div>
     {/if}
 
+    <!-- Credentials Error Message from server form -->
+    {#if formMessage}
+      <div class="mt-4 rounded-lg bg-red-50 border border-red-200 p-4">
+        <div class="text-sm text-red-700">{formMessage}</div>
+      </div>
+    {/if}
+
     <div class="card mt-6 p-6">
       <h2 class="mb-2 text-xl font-semibold">Sign in</h2>
       <p class="mb-6 text-sm text-gray-600">Use your email and password.</p>
@@ -39,7 +49,11 @@
         <div class="space-y-2">
           <label class="text-sm font-medium" for="loginPassword">Password</label>
           <input class="input" id="loginPassword" type="password" name="password" placeholder="••••••••" required />
-
+          <div class="mt-2 text-right text-sm">
+            <button type="button" class="underline text-gray-600 hover:text-gray-900" on:click={() => (location.href = '/forgot-password')}>
+              Reset password
+            </button>
+          </div>
         </div>
         <div class="flex justify-center">
           <button class="btn btn-primary rounded-full px-4 py-2 text-sm">Sign in</button>
