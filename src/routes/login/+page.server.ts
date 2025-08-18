@@ -4,6 +4,7 @@ import { users, session } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { compare } from 'bcryptjs';
 import { fail, redirect } from '@sveltejs/kit';
+import { randomUUID } from 'node:crypto';
 
 export const load: PageServerLoad = async ({ url, locals }) => {
   // Check if user is already authenticated
@@ -39,12 +40,13 @@ export const actions: Actions = {
     const [user] = await db.select().from(users).where(eq(users.email, email));
     if (!user || !user.hashedPassword) return fail(400, { message: 'Invalid credentials.' });
     if (user.disabled) return fail(403, { message: 'Account is disabled.' });
+    if (!user.emailVerified) return fail(403, { message: 'Please verify your email to sign in.' });
 
     const ok = await compare(password, user.hashedPassword);
     if (!ok) return fail(400, { message: 'Invalid credentials.' });
 
     // Create a session token manually for now
-    const sessionToken = crypto.randomUUID();
+    const sessionToken = randomUUID();
     const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
     
     // Insert session into database
@@ -64,7 +66,6 @@ export const actions: Actions = {
     });
 
     // Redirect based on user role
-    const destination = user.role === 'admin' ? '/dashboard' : '/user';
-    throw redirect(303, destination);
+    throw redirect(303, '/user');
   }
 };
