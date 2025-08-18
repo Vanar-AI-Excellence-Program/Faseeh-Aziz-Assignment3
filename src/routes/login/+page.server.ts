@@ -38,12 +38,12 @@ export const actions: Actions = {
     if (!email || !password) return fail(400, { message: 'Email and password are required.' });
 
     const [user] = await db.select().from(users).where(eq(users.email, email));
-    if (!user || !user.hashedPassword) return fail(400, { message: 'Invalid credentials.' });
+    if (!user || !user.hashedPassword) return fail(400, { message: 'Incorrect email or password entered.' });
     if (user.disabled) return fail(403, { message: 'Account is disabled.' });
     if (!user.emailVerified) return fail(403, { message: 'Please verify your email to sign in.' });
 
     const ok = await compare(password, user.hashedPassword);
-    if (!ok) return fail(400, { message: 'Invalid credentials.' });
+    if (!ok) return fail(400, { message: 'Incorrect email or password entered.' });
 
     // Create a session token manually for now
     const sessionToken = randomUUID();
