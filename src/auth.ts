@@ -155,23 +155,41 @@ export const authOptions = {
             await db
               .update(user)
               .set({
-                name: profile.name || authUser.name,
-                email: profile.email || authUser.email,
-                image: profile.picture || authUser.image
+                name: profile.name || authUser.name || null,
+                email: profile.email || authUser.email || '',
+                image: profile.picture || authUser.image || null, // Google profile has picture property
+                emailVerified: new Date() // Auto-verify email for OAuth users
               })
               .where(eq(user.id, authUser.id));
           } else if (authAccount.provider === 'github') {
             await db
               .update(user)
               .set({
-                name: profile.name || authUser.name,
-                email: profile.email || authUser.email,
-                image: profile.avatar_url || authUser.image
+                name: profile.name || authUser.name || null,
+                email: profile.email || authUser.email || '',
+                image: (profile as any).avatar_url || authUser.image || null, // GitHub profile has avatar_url property
+                emailVerified: new Date() // Auto-verify email for OAuth users
               })
               .where(eq(user.id, authUser.id));
           }
         } catch (error) {
           console.error('Error updating user profile:', error);
+        }
+      }
+    },
+
+    async createUser(params: { user: User; account?: Account | null; profile?: Profile }) {
+      const { user: authUser, account: authAccount } = params;
+      // Auto-verify email for new OAuth users
+      if (authAccount && authAccount.provider !== 'credentials' && authUser && authUser.id) {
+        try {
+          await db
+            .update(user)
+            .set({ emailVerified: new Date() })
+            .where(eq(user.id, authUser.id));
+          console.log(`Auto-verified email for new ${authAccount.provider} user: ${authUser.email}`);
+        } catch (error) {
+          console.error('Error auto-verifying email for new OAuth user:', error);
         }
       }
     },
