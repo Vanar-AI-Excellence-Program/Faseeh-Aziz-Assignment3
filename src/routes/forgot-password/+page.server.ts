@@ -1,6 +1,6 @@
 import type { Actions } from './$types';
 import { db } from '$lib/server/db';
-import { users, verificationToken, session } from '$lib/server/db/schema';
+import { user, verificationToken, session } from '$lib/server/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
@@ -15,7 +15,7 @@ export const actions: Actions = {
 		if (!email) return fail(400, { message: 'Email is required.' });
 
 		try {
-			const [existing] = await db.select().from(users).where(eq(users.email, email));
+			const [existing] = await db.select().from(user).where(eq(user.email, email));
 			if (existing) {
 				const code = Math.floor(100000 + Math.random() * 900000).toString();
 				const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
@@ -72,10 +72,10 @@ export const actions: Actions = {
 		}
 
 		const hashedPassword = await hash(password, 10);
-		const [u] = await db.select().from(users).where(eq(users.email, email));
+		const [u] = await db.select().from(user).where(eq(user.email, email));
 		if (!u) return fail(400, { message: 'Invalid request.', step: 'verify', email });
 
-		await db.update(users).set({ hashedPassword }).where(eq(users.id, u.id));
+		await db.update(user).set({ hashedPassword }).where(eq(user.id, u.id));
 		await db.delete(verificationToken).where(eq(verificationToken.identifier, email));
 
 		// Create session and set cookie

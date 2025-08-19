@@ -1,7 +1,7 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { user as users } from '$lib/server/db/schema';
+import { user } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 
 export const GET: RequestHandler = async ({ locals }) => {
@@ -15,7 +15,7 @@ export const GET: RequestHandler = async ({ locals }) => {
   let role: string | undefined = (session.user as any).role;
   if (!role && session.user.id) {
     try {
-      const [u] = await db.select().from(users).where(eq(users.id, session.user.id));
+      const [u] = await db.select().from(user).where(eq(user.id, session.user.id));
       role = u?.role ?? undefined;
     } catch {}
   }
