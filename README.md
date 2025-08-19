@@ -187,7 +187,7 @@ The application uses the following main tables:
 1. **Registration**: User signs up with email verification
 2. **Login**: Email/password or OAuth authentication
 3. **Verification**: OTP-based email verification
-4. **Session**: JWT-based session management
+4. **Session**: Database-backed session management with Auth.js
 5. **Access Control**: Role-based route protection
 
 ### Chat System
