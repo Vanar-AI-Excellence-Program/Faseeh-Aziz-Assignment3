@@ -11,15 +11,19 @@
 	$: if ($page?.form?.action === 'signin' && $page?.form?.error) {
 		rightActive = false;
 	}
+	// NEW: if URL contains signup=1, prefer opening the Sign Up panel
+	$: if ($page.url.searchParams.get('signup') === '1') {
+		rightActive = true;
+	}
 </script>
 
 <svelte:head>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
 </svelte:head>
 
-<section class="fixed inset-0 w-screen h-screen overflow-hidden flex items-center justify-center px-4" style="background:linear-gradient(135deg,#E9F1FA 0%, #FFFFFF 70%);">
+<section class="relative w-screen h-svh overflow-hidden flex items-start justify-center px-4 pt-0" style="background-color:#E9F1FA;">
 	<div id="container" class="auth-container" class:right-panel-active={rightActive}>
 		<!-- Sign Up (prompt) -->
 		<div class="form-container sign-up-container">
@@ -45,7 +49,8 @@
 				{/if}
 				<form method="POST" action="?/register" class="w-full contents">
 					<div class="w-full flex flex-col items-center">
-						<input class="auth-input" type="text" name="name" placeholder="Name" />
+						<input class="auth-input" type="text" name="firstName" placeholder="First name" />
+						<input class="auth-input" type="text" name="lastName" placeholder="Last name" />
 						<input class="auth-input" type="email" name="email" placeholder="Email" required />
 						<input class="auth-input" type="password" name="password" placeholder="Password" required />
 						<button class="auth-btn" type="submit">Sign Up</button>
@@ -109,9 +114,7 @@
 
 <style>
 /* Scoped auth styles (inspired by template) */
-:global(html,body){height:100%;overflow:hidden}
-:global(body){font-family:'Montserrat',sans-serif;margin:0}
-.auth-container{background:#fff;border-radius:12px;box-shadow:0 14px 28px rgba(0,0,0,0.25),0 10px 10px rgba(0,0,0,0.22);position:relative;overflow:hidden;width:950px;max-width:100%;min-height:520px;height:clamp(520px,78svh,680px)}
+.auth-container{font-family:'Montserrat',sans-serif;background:#fff;border-radius:12px;box-shadow:0 14px 28px rgba(0,0,0,0.25),0 10px 10px rgba(0,0,0,0.22);position:relative;overflow:hidden;width:900px;max-width:calc(100% - 24px);min-height:520px;height:clamp(520px,72svh,640px)}
 .form-container{position:absolute;top:0;height:100%;transition:all .6s ease-in-out}
 .sign-in-container{left:0;width:50%;z-index:2}
 .sign-up-container{left:0;width:50%;opacity:0;z-index:1}
@@ -135,7 +138,6 @@
 .social-container{margin:18px 0 10px}
 .social{border:1px solid #DDD;border-radius:50%;display:inline-flex;justify-content:center;align-items:center;margin:0 8px;height:44px;width:44px;cursor:pointer;background:#fff;color:#444}
 .auth-form h1{font-weight:800;font-size:42px;line-height:1.1;margin-bottom:8px}
-label{font-weight:600}
 .auth-form a{margin:8px 0 16px;color:#555}
 /* Right gradient panel typography */
 .overlay-panel h1{font-weight:800;font-size:44px;line-height:1.1;margin:0 0 14px;color:#fff}
