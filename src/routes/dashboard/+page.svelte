@@ -1,184 +1,296 @@
 <script lang="ts">
-  import ChatPopup from '$lib/components/ChatPopup.svelte';
-  import { enhance } from '$app/forms';
-  import { page } from '$app/stores';
+  import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   
-  export let data: {
-    user: { name?: string | null; email?: string | null; role?: string | null };
-    users: { id: string; email: string | null; role: string; disabled: boolean }[];
-    stats: { total: number; admins: number; disabled: number };
+  export let data: { 
+    user: { 
+      id?: string; 
+      name?: string | null; 
+      email?: string | null; 
+      role?: string | null 
+    },
+    stats: {
+      totalUsers: number;
+      verifiedUsers: number;
+      unverifiedUsers: number;
+      adminUsers: number;
+      regularUsers: number;
+    }
   };
-
-  let selectedUser: { id: string; email: string | null; role: string; disabled: boolean } | null = null;
-  let showRoleModal = false;
-  let showStatusModal = false;
-  let newRole = 'user';
-  let action = 'disable';
-
-  function openRoleModal(user: typeof data.users[0]) {
-    selectedUser = user;
-    newRole = user.role;
-    showRoleModal = true;
-  }
-
-  function openStatusModal(user: typeof data.users[0]) {
-    selectedUser = user;
-    action = user.disabled ? 'enable' : 'disable';
-    showStatusModal = true;
-  }
-
-  function closeModals() {
-    showRoleModal = false;
-    showStatusModal = false;
-    selectedUser = null;
-  }
-
-  // Auto-refresh after form submission
-  $: if ($page.form?.success) {
-    setTimeout(() => {
-      window.location.reload();
-    }, 1000);
-  }
+  
+  let isClient = false;
+  
+  onMount(() => {
+    isClient = true;
+  });
 </script>
 
-<div class="mx-auto max-w-5xl space-y-6">
-  <div class="card">
-    <h1 class="mb-2 text-2xl font-semibold">Admin dashboard</h1>
-    <p class="text-sm text-gray-600">Users: {data.stats.total} • Admins: {data.stats.admins} • Disabled: {data.stats.disabled}</p>
-  </div>
-
-  <div class="card">
-    <h2 class="mb-3 text-lg font-semibold">Registered users</h2>
-    <div class="overflow-x-auto">
-      <table class="w-full text-left text-sm">
-        <thead class="text-gray-600">
-          <tr>
-            <th class="py-2">Email</th>
-            <th class="py-2">Role</th>
-            <th class="py-2">Status</th>
-            <th class="py-2">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each data.users as u}
-            <tr class="border-t">
-              <td class="py-2">{u.email}</td>
-              <td class="py-2">
-                <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {u.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}">
-                  {u.role}
-                </span>
-              </td>
-              <td class="py-2">
-                <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {u.disabled ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">
-                  {u.disabled ? 'Disabled' : 'Active'}
-                </span>
-              </td>
-              <td class="py-2">
-                <div class="flex gap-2">
-                  <button 
-                    onclick={() => openRoleModal(u)}
-                    class="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 disabled:opacity-50"
-                    disabled={u.id === data.user.id}
-                  >
-                    Change Role
-                  </button>
-                  <button 
-                    onclick={() => openStatusModal(u)}
-                    class="text-xs {u.disabled ? 'bg-green-500' : 'bg-red-500'} text-white px-2 py-1 rounded hover:opacity-80 disabled:opacity-50"
-                    disabled={u.id === data.user.id}
-                  >
-                    {u.disabled ? 'Enable' : 'Disable'}
-                  </button>
-                </div>
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
+{#if isClient}
+  <div class="dashboard-content">
+    <div class="dashboard-header">
+      <h1 class="dashboard-title">Admin Dashboard</h1>
+      <p class="dashboard-subtitle">Welcome back, {data.user.name || 'Admin'}!</p>
     </div>
-  </div>
 
-  <!-- Role Change Modal -->
-  {#if showRoleModal && selectedUser}
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 class="text-lg font-semibold mb-4">Change User Role</h3>
-        <p class="text-sm text-gray-600 mb-4">Change role for user: <strong>{selectedUser.email}</strong></p>
-        
-        <form method="POST" action="?/changeRole" use:enhance>
-          <input type="hidden" name="userId" value={selectedUser.id} />
-          
-          <div class="mb-4">
-            <label class="block text-sm font-medium mb-2">New Role</label>
-            <select name="role" bind:value={newRole} class="w-full border rounded px-3 py-2">
-              <option value="user">User</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
-          
-          <div class="flex gap-3 justify-end">
-            <button type="button" onclick={closeModals} class="px-4 py-2 text-gray-600 hover:text-gray-800">
-              Cancel
-            </button>
-            <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
-              Update Role
-            </button>
-          </div>
-        </form>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon users-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <h3 class="stat-number">{data.stats.totalUsers}</h3>
+          <p class="stat-label">Total Users</p>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon verified-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22,4 12,14.01 9,11.01"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <h3 class="stat-number">{data.stats.verifiedUsers}</h3>
+          <p class="stat-label">Verified Users</p>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon unverified-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="15" y1="9" x2="9" y2="15"/>
+            <line x1="9" y1="9" x2="15" y2="15"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <h3 class="stat-number">{data.stats.unverifiedUsers}</h3>
+          <p class="stat-label">Unverified Users</p>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon admin-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <h3 class="stat-number">{data.stats.adminUsers}</h3>
+          <p class="stat-label">Admin Users</p>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon regular-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <h3 class="stat-number">{data.stats.regularUsers}</h3>
+          <p class="stat-label">Regular Users</p>
+        </div>
       </div>
     </div>
-  {/if}
 
-  <!-- Status Toggle Modal -->
-  {#if showStatusModal && selectedUser}
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 class="text-lg font-semibold mb-4">Toggle User Status</h3>
-        <p class="text-sm text-gray-600 mb-4">
-          {action === 'disable' ? 'Disable' : 'Enable'} user: <strong>{selectedUser.email}</strong>
-        </p>
-        
-        <form method="POST" action="?/toggleUserStatus" use:enhance>
-          <input type="hidden" name="userId" value={selectedUser.id} />
-          <input type="hidden" name="action" value={action} />
-          
-          <div class="mb-4">
-            <p class="text-sm text-gray-600">
-              {action === 'disable' 
-                ? 'This user will not be able to log in until re-enabled.' 
-                : 'This user will be able to log in again.'}
-            </p>
+    <div class="quick-actions">
+      <h2 class="section-title">Quick Actions</h2>
+      <div class="actions-grid">
+        <a href="/user" class="action-card">
+          <div class="action-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+            </svg>
           </div>
-          
-          <div class="flex gap-3 justify-end">
-            <button type="button" onclick={closeModals} class="px-4 py-2 text-gray-600 hover:text-gray-800">
-              Cancel
-            </button>
-            <button 
-              type="submit" 
-              class="px-4 py-2 {action === 'disable' ? 'bg-red-500' : 'bg-green-500'} text-white rounded hover:opacity-80"
-            >
-              {action === 'disable' ? 'Disable User' : 'Enable User'}
-            </button>
+          <h3>View All Users</h3>
+          <p>Browse and manage user accounts</p>
+        </a>
+
+        <a href="/chat" class="action-card">
+          <div class="action-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
           </div>
-        </form>
+          <h3>Open Chat</h3>
+          <p>Access the chat application</p>
+        </a>
+
+        <a href="/settings" class="action-card">
+          <div class="action-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </div>
+          <h3>Settings</h3>
+          <p>Manage your profile and preferences</p>
+        </a>
       </div>
     </div>
-  {/if}
+  </div>
+{/if}
 
-  <!-- Success Message -->
-  {#if $page.form?.success}
-    <div class="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
-      {$page.form.message}
-    </div>
-  {/if}
+<style>
+  .dashboard-content {
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
 
-  <!-- Error Message -->
-  {#if $page.form?.error}
-    <div class="fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
-      {$page.form.error}
-    </div>
-  {/if}
-</div>
+  .dashboard-header {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
 
-<ChatPopup title="Admin Assistant" placeholder="Ask about admin features..." />
+  .dashboard-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin-bottom: 0.5rem;
+  }
+
+  .dashboard-subtitle {
+    font-size: 1.125rem;
+    color: #6b7280;
+    margin: 0;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+  }
+
+  .stat-card {
+    background: white;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  }
+
+  .stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+  }
+
+  .users-icon { background: linear-gradient(135deg, #00ABE4 0%, #34c5f1 100%); }
+  .verified-icon { background: linear-gradient(135deg, #10b981 0%, #34d399 100%); }
+  .unverified-icon { background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); }
+  .admin-icon { background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%); }
+  .regular-icon { background: linear-gradient(135deg, #6b7280 0%, #9ca3af 100%); }
+
+  .stat-content h3 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0 0 0.25rem 0;
+  }
+
+  .stat-content p {
+    color: #6b7280;
+    margin: 0;
+    font-size: 0.875rem;
+  }
+
+  .quick-actions {
+    margin-top: 2rem;
+  }
+
+  .section-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 1.5rem;
+    text-align: center;
+  }
+
+  .actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .action-card {
+    background: white;
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    text-align: center;
+  }
+
+  .action-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  }
+
+  .action-icon {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #00ABE4 0%, #34c5f1 100%);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    color: white;
+  }
+
+  .action-card h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0 0 0.5rem 0;
+  }
+
+  .action-card p {
+    color: #6b7280;
+    margin: 0;
+    font-size: 0.875rem;
+  }
+
+  @media (max-width: 768px) {
+    .dashboard-content {
+      padding: 1rem;
+    }
+    
+    .dashboard-title {
+      font-size: 2rem;
+    }
+    
+    .stats-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .actions-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

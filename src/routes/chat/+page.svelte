@@ -16,12 +16,12 @@
   let input = '';
   let loading = false;
   let error: string | null = null;
-  let fileInput: HTMLInputElement;
-  let uploadedFile: File | null = null;
-  let sidebarOpen = true;
+
   let replyToMessageId: string | null = null;
   let renamingChatId: string | null = null;
   let renameInput = '';
+  let fileInput: HTMLInputElement;
+  let uploadedFile: File | null = null;
   $: replyToMessage = activeChat?.messages.find((m) => m.id === replyToMessageId) || null;
 
   // Minimal action to inject trusted HTML (generated locally)
@@ -57,7 +57,7 @@
     text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     // Simple paragraphs/line breaks
     const lines = text.split('\n');
-    return lines.map((l) => (l.trim() ? `<p>${l}</p>` : '<p><br/></p>')).join('');
+    return lines.map((l) => (l.trim() ? `<p>${l}</p>` : `<p><br/></p>`)).join('');
   }
 
   // Auto-scroll to bottom
@@ -141,18 +141,7 @@
     }
   }
 
-  function handleFileSelect(event: Event) {
-    const target = event.target as HTMLInputElement;
-    const file = target.files?.[0];
-    if (file) {
-      uploadedFile = file;
-    }
-  }
 
-  function removeFile() {
-    uploadedFile = null;
-    if (fileInput) fileInput.value = '';
-  }
 
   function getParentMessageContent(msg: Message): string | null {
     if (!msg.parentId || !activeChat) return null;
@@ -229,12 +218,12 @@
           chain.push(userMsg);
           
           console.log('Fork context:', { replyToMessageId, chain: chain.map(m => ({ role: m.role, content: m.content.substring(0, 50) })) });
-          return chain.map(({ role, content }) => ({ role, content }));
+          return chain.map(({ role, content }) => ({ role, content, chatId: activeChat.id }));
         } else {
           // Normal linear conversation - send all messages plus the new user message
           const allMessages = [...activeChat.messages, userMsg];
           console.log('Normal conversation - all messages:', allMessages.map(m => ({ role: m.role, content: m.content.substring(0, 50) })));
-          return allMessages.map(({ role, content }) => ({ role, content }));
+          return allMessages.map(({ role, content }) => ({ role, content, chatId: activeChat.id }));
         }
       })();
 
@@ -274,18 +263,11 @@
       // Clear reply banner after adding message
       replyToMessageId = null;
 
-      const formData = new FormData();
-      formData.append('messages', JSON.stringify(validBranchMessages));
-      
-      if (uploadedFile) {
-        formData.append('file', uploadedFile);
-      }
-
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        body: uploadedFile ? formData : JSON.stringify({ messages: validBranchMessages }),
-        headers: uploadedFile ? {} : { 'content-type': 'application/json' }
-      });
+             const res = await fetch('/api/chat', {
+         method: 'POST',
+         body: JSON.stringify({ messages: validBranchMessages }),
+         headers: { 'content-type': 'application/json' }
+       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -365,7 +347,7 @@
         console.error('Failed to save messages:', e);
       }
 
-      removeFile();
+      
     } catch (e: any) {
       error = e?.message ?? 'Unknown error';
     } finally {
@@ -405,9 +387,7 @@
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  function toggleSidebar() {
-    sidebarOpen = !sidebarOpen;
-  }
+
 
   function startRename(c: Chat) {
     renamingChatId = c.id;
@@ -434,13 +414,14 @@
   }
 </script>
 
-<div class="fixed inset-0 flex bg-white pt-16">
-  <!-- Sidebar -->
-  <div class={`${sidebarOpen ? 'w-72' : 'w-0'} transition-all duration-300 overflow-hidden bg-gray-50 border-r border-gray-200 flex flex-col min-h-0`}>
+<div class="flex bg-white h-full">
+
+  <!-- Chat Sidebar -->
+  <div class="w-80 bg-gray-50 border-r border-gray-200 flex flex-col min-h-0">
     <div class="p-4 border-b border-gray-200">
       <button
         onclick={createNewChat}
-        class="w-full btn btn-primary rounded-lg px-4 py-2 text-sm flex items-center justify-center gap-2 cursor-pointer"
+        class="w-full bg-blue-600 text-white rounded-lg px-4 py-2 text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-blue-700 transition-colors"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
@@ -453,13 +434,13 @@
       {#each chats as chat (chat.id)}
         <div
           class={`p-3 rounded-lg mb-2 cursor-pointer group relative ${
-            activeChat?.id === chat.id ? 'bg-indigo-100 text-indigo-900' : 'hover:bg-gray-100'
+            activeChat?.id === chat.id ? 'bg-blue-100 text-blue-900' : 'hover:bg-gray-100'
           }`}
           onclick={() => selectChat(chat)}
         >
           {#if renamingChatId === chat.id}
             <input
-              class="text-sm font-medium w-full bg-white border border-indigo-300 rounded px-2 py-1"
+              class="text-sm font-medium w-full bg-white border border-blue-300 rounded px-2 py-1"
               bind:value={renameInput}
               onkeydown={(e) => {
                 if (e.key === 'Enter') { e.preventDefault(); confirmRename(chat); }
@@ -472,20 +453,22 @@
             <div class="text-sm font-medium truncate">{chat.title}</div>
           {/if}
           <div class="text-xs text-gray-500 mt-1">{chat.createdAt.toLocaleDateString()}</div>
-          <button
-            onclick={(e) => { e.stopPropagation(); deleteChat(chat.id); }}
-            class="absolute top-2 right-2 text-red-500 hover:text-red-700 text-xs cursor-pointer"
-            aria-label="Delete chat"
-          >
-            ✕
-          </button>
-          <button
-            onclick={(e) => { e.stopPropagation(); startRename(chat); }}
-            class="absolute top-2 right-8 text-gray-500 hover:text-gray-700 text-xs cursor-pointer"
-            aria-label="Rename chat"
-          >
-            ✎
-          </button>
+          <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+            <button
+              onclick={(e) => { e.stopPropagation(); startRename(chat); }}
+              class="text-gray-500 hover:text-gray-700 text-xs cursor-pointer p-1 hover:bg-gray-200 rounded"
+              aria-label="Rename chat"
+            >
+              ✎
+            </button>
+            <button
+              onclick={(e) => { e.stopPropagation(); deleteChat(chat.id); }}
+              class="text-red-500 hover:text-red-700 text-xs cursor-pointer p-1 hover:bg-gray-200 rounded"
+              aria-label="Delete chat"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       {/each}
     </div>
@@ -493,22 +476,17 @@
 
   <!-- Main Chat Area -->
   <div class="flex-1 flex flex-col min-h-0">
-    <!-- Header -->
-    <header class="border-b border-gray-200 p-4 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <button onclick={toggleSidebar} class="text-gray-500 hover:text-gray-700 cursor-pointer">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-          </svg>
-        </button>
-        <h1 class="text-lg font-semibold text-gray-900">
-          {activeChat?.title || 'AI Assistant'}
-        </h1>
-      </div>
-      <div class="text-sm text-gray-500">
-        Hello, {data.user.name || 'User'}
-      </div>
-    </header>
+         <!-- Header -->
+     <header class="border-b border-gray-200 p-4 flex items-center justify-between">
+       <div class="flex items-center gap-3">
+         <h1 class="text-lg font-semibold text-gray-900">
+           {activeChat?.title || 'AI Assistant'}
+         </h1>
+       </div>
+       <div class="text-sm text-gray-500">
+         Hello, {data.user.name || 'User'}
+       </div>
+     </header>
 
     <!-- Messages -->
     <div bind:this={messagesContainer} class="flex-1 overflow-y-auto p-4 space-y-4">
@@ -604,19 +582,7 @@
           </button>
         </div>
       {/if}
-      {#if uploadedFile}
-        <div class="mb-3 p-3 bg-blue-50 rounded-lg flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
-            </svg>
-            <span class="text-sm text-blue-900">{uploadedFile.name}</span>
-          </div>
-          <button onclick={removeFile} class="text-red-500 hover:text-red-700 cursor-pointer">
-            ✕
-          </button>
-        </div>
-      {/if}
+      
 
       <div class="flex items-end gap-3">
         <div class="flex-1">
@@ -630,34 +596,17 @@
           ></textarea>
         </div>
         
-        <div class="flex gap-2">
-          <input
-            bind:this={fileInput}
-            type="file"
-            accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
-            onchange={handleFileSelect}
-            class="hidden"
-          />
-          <button
-            onclick={() => fileInput?.click()}
-            class="p-3 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
-            title="Upload file"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
-            </svg>
-          </button>
-          
-          <button
-            onclick={sendMessage}
-            disabled={loading || (!input.trim() && !uploadedFile)}
-            class="p-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
-            </svg>
-          </button>
-        </div>
+                 <div class="flex gap-2">
+           <button
+             onclick={sendMessage}
+             disabled={loading || !input.trim()}
+             class="p-3 bg-green-600 text-white rounded-full hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+           >
+             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+             </svg>
+           </button>
+         </div>
       </div>
       
       <div class="mt-2 text-xs text-gray-500 text-center">
@@ -666,3 +615,70 @@
     </div>
   </div>
 </div>
+
+<style>
+  /* Chat-specific styles using basic CSS properties */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .btn:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .btn-primary {
+    background-color: rgb(79 70 229);
+    color: white;
+    height: 2.5rem;
+    padding: 0.5rem 1rem;
+  }
+
+  .btn-primary:hover {
+    background-color: rgb(67 56 202);
+  }
+
+  .prose {
+    color: rgb(17 24 39);
+  }
+
+  .prose p {
+    margin-bottom: 0.5rem;
+  }
+
+  .prose p:last-child {
+    margin-bottom: 0;
+  }
+
+  .prose code {
+    background-color: rgb(243 244 246);
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+
+  .prose pre {
+    background-color: rgb(243 244 246);
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+  }
+
+  .prose pre code {
+    background-color: transparent;
+    padding: 0;
+  }
+
+  .prose strong {
+    font-weight: 600;
+  }
+</style>

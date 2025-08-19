@@ -8,7 +8,18 @@ export const load: LayoutServerLoad = async ({ locals, cookies }) => {
   try {
     const authSession = await locals.auth();
     if (authSession?.user) {
-      return { viewer: authSession.user };
+      // Always fetch fresh user data from database to get latest role
+      const [userData] = await db.select().from(user).where(eq(user.id, authSession.user.id));
+      if (userData && !userData.disabled) {
+        return { 
+          viewer: { 
+            id: userData.id, 
+            email: userData.email, 
+            name: userData.name, 
+            role: userData.role 
+          } 
+        };
+      }
     }
   } catch (error) {
     // Auth.js session failed, try manual session

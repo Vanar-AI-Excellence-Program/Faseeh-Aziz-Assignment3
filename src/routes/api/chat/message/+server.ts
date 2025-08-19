@@ -1,17 +1,36 @@
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
-import { message, chat } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { message } from '$lib/server/db/schema';
+import { randomUUID } from 'crypto';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-  const session = await locals.auth();
-  if (!session?.user?.id) return new Response('Unauthorized', { status: 401 });
-  const body = await request.json().catch(() => ({}));
-  const { id, chatId, parentId, role, content } = body as any;
-  if (!id || !chatId || !role || !content) return new Response('Bad Request', { status: 400 });
-  await db.insert(message).values({ id, chatId, parentId: parentId ?? null, role, content });
-  await db.update(chat).set({ updatedAt: new Date() as any }).where(eq(chat.id, chatId));
-  return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } });
+  try {
+    const session = await locals.auth();
+    if (!session?.user?.id) {
+      return json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id, chatId, parentId, role, content } = await request.json();
+    
+    if (!id || !chatId || !role || !content) {
+      return json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    const [newMessage] = await db.insert(message).values({
+      id,
+      chatId,
+      parentId,
+      role,
+      content,
+      createdAt: new Date()
+    }).returning();
+
+    return json({ success: true, message: newMessage });
+  } catch (error) {
+    console.error('Error saving message:', error);
+    return json({ error: 'Failed to save message' }, { status: 500 });
+  }
 };
 
 

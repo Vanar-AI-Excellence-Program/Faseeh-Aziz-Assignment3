@@ -1,15 +1,30 @@
-import type { PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
+import { db } from '$lib/server/db';
+import { user } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ locals }) => {
-  const session = await locals.auth();
-  if (!session?.user?.id) throw redirect(303, '/login');
+  const session = await locals.getSession();
   
-  // Type assertion for the user role
-  const userRole = (session.user as any).role;
-  if (userRole === 'admin') throw redirect(303, '/dashboard');
-  
-  return { name: session.user.name || 'User' };
+  if (!session) {
+    throw redirect(302, '/login');
+  }
+
+  // Check if user is admin and redirect to dashboard
+  if (session.user.role === 'admin') {
+    throw redirect(302, '/dashboard');
+  }
+
+  // Return user data for the page
+  return {
+    user: {
+      id: session.user.id,
+      email: session.user.email,
+      name: session.user.name,
+      role: session.user.role
+    }
+  };
 };
 
 
