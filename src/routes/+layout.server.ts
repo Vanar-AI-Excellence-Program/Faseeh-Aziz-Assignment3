@@ -1,6 +1,6 @@
 import type { LayoutServerLoad } from './$types';
 import { db } from '$lib/server/db';
-import { users, session } from '$lib/server/db/schema';
+import { user, session } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 
 export const load: LayoutServerLoad = async ({ locals, cookies }) => {
@@ -20,7 +20,7 @@ export const load: LayoutServerLoad = async ({ locals, cookies }) => {
     try {
       const [sessionData] = await db.select().from(session).where(eq(session.sessionToken, sessionToken));
       if (sessionData && sessionData.expires > new Date()) {
-        const [userData] = await db.select().from(users).where(eq(users.id, sessionData.userId));
+        const [userData] = await db.select().from(user).where(eq(user.id, sessionData.userId));
         if (userData && !userData.disabled) {
           return { 
             viewer: { 

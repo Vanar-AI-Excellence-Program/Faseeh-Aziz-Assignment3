@@ -62,12 +62,3 @@ export const message = pgTable('message', {
   content: text('content').notNull(),
   createdAt: timestamp('createdAt', { mode: 'date' }).notNull().defaultNow()
 });
-
-export const pendingUser = pgTable('pending_user', {
-  id: text('id').primaryKey(),
-  email: text('email').notNull(),
-  hashedPassword: text('hashedPassword').notNull(),
-  firstName: text('firstName'),
-  lastName: text('lastName'),
-  createdAt: timestamp('createdAt', { mode: 'date' }).notNull().defaultNow()
-});

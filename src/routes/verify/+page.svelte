@@ -64,9 +64,13 @@
     <div class="card mt-6 p-6">
       <h2 class="mb-2 text-xl font-semibold">Enter verification code</h2>
       {#if $page.form?.error}
-        <div class="mb-3 rounded bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{$page.form.message}</div>
+        <div class="mb-3 rounded bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+          Error: {$page.form.message}
+          <br>
+          Debug: {$page.form?.error ? 'true' : 'false'}
+        </div>
       {/if}
-      <form method="POST" action="?/verify" class="space-y-4">
+      <form method="POST" action="?/verify" class="space-y-4" use:enhance>
         <input type="hidden" name="email" value={data.email} />
         <div class="space-y-2">
           <label class="text-sm font-medium" for="code">6-digit code</label>
