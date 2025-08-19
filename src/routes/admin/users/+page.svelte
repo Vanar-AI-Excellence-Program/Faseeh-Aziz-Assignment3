@@ -24,9 +24,17 @@
   let confirmAction = '';
   let confirmUserId = '';
   let confirmUserEmail = '';
+  
+  // Create a local copy of users data for immediate updates
+  let localUsers = [...data.users];
+  
+  // Sync local users with server data when it changes
+  $: if (data.users) {
+    localUsers = [...data.users];
+  }
 
-  // Filter and sort users
-  $: filteredUsers = data.users
+    // Filter and sort users
+  $: filteredUsers = localUsers
     .filter(user => {
       const matchesSearch = user.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
                            user.email.toLowerCase().includes(searchTerm.toLowerCase());
@@ -37,16 +45,16 @@
       
       return matchesSearch && matchesRole && matchesStatus;
     })
-         .sort((a, b) => {
-       let aValue: any = a[sortBy];
-       let bValue: any = b[sortBy];
-       
-       if (sortOrder === 'asc') {
-         return aValue > bValue ? 1 : -1;
-       } else {
-         return aValue < bValue ? 1 : -1;
-       }
-     });
+    .sort((a, b) => {
+      let aValue: any = a[sortBy];
+      let bValue: any = b[sortBy];
+      
+      if (sortOrder === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
 
 
 
@@ -66,23 +74,65 @@
     return 'Active';
   }
 
-  // Handle form messages
+  // Handle form messages and update local state
   $: if ($page.form?.action === 'changeRole' && $page.form?.success) {
     message = $page.form.message || 'User role updated successfully';
     messageType = 'success';
     setTimeout(() => message = '', 3000);
+    
+    // Update local user data immediately to prevent UI flash
+    const formData = new FormData($page.form?.data);
+    const userId = formData.get('userId');
+    const newRole = formData.get('role');
+    
+    if (userId && newRole) {
+      const userIndex = localUsers.findIndex(u => u.id === userId);
+      if (userIndex !== -1) {
+        localUsers[userIndex].role = newRole as string;
+        // Trigger reactivity by reassigning the array
+        localUsers = [...localUsers];
+      }
+    }
   }
   
   $: if ($page.form?.action === 'toggleUserStatus' && $page.form?.success) {
     message = $page.form.message || 'User status updated successfully';
     messageType = 'success';
     setTimeout(() => message = '', 3000);
+    
+    // Update local user data immediately to prevent UI flash
+    const formData = new FormData($page.form?.data);
+    const userId = formData.get('userId');
+    
+    if (userId) {
+      const userIndex = localUsers.findIndex(u => u.id === userId);
+      if (userIndex !== -1) {
+        localUsers[userIndex].disabled = !localUsers[userIndex].disabled;
+        // Trigger reactivity by reassigning the array
+        localUsers = [...localUsers];
+      }
+    }
   }
   
   $: if ($page.form?.error) {
     message = $page.form.message || 'An error occurred';
     messageType = 'error';
     setTimeout(() => message = '', 5000);
+    
+    // Revert local state changes if the server action failed
+    // This ensures the UI shows the correct state from the server
+    if ($page.form?.data) {
+      const formData = new FormData($page.form.data);
+      const action = $page.form.action;
+      
+      if (action === 'changeRole') {
+        // Revert role change by syncing with server data
+        localUsers = [...data.users];
+      } else if (action === 'toggleUserStatus') {
+        // Revert status change by syncing with server data
+        localUsers = [...data.users];
+      }
+    }
   }
 
   function showConfirm(action: string, userId: string, userEmail: string) {
@@ -120,10 +170,10 @@
             <p class="text-gray-600 mt-2">Manage all users, roles, and account status</p>
           </div>
         </div>
-        <div class="text-right">
-          <div class="text-2xl font-bold text-blue-600">{filteredUsers.length}</div>
-          <div class="text-sm text-gray-500">Total Users</div>
-        </div>
+                 <div class="text-right">
+           <div class="text-2xl font-bold text-blue-600">{localUsers.length}</div>
+           <div class="text-sm text-gray-500">Total Users</div>
+         </div>
       </div>
     </div>
 
@@ -267,29 +317,53 @@
                  <!-- Actions -->
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <div class="flex space-x-2">
-                    <!-- Change Role -->
-                    <form method="POST" action="?/changeRole" use:enhance class="inline">
-                      <input type="hidden" name="userId" value={user.id} />
-                      <select
-                        name="role"
-                        class="text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors hover:border-blue-400"
-                        onchange={(e) => e.target.form?.submit()}
-                      >
-                        <option value="user" selected={user.role === 'user'}>User</option>
-                        <option value="admin" selected={user.role === 'admin'}>Admin</option>
-                      </select>
-                    </form>
+                                         <!-- Change Role -->
+                     <form method="POST" action="?/changeRole" use:enhance class="inline">
+                       <input type="hidden" name="userId" value={user.id} />
+                       <select
+                         name="role"
+                         class="text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors hover:border-blue-400"
+                         onchange={(e) => {
+                           const form = e.target.form;
+                           if (form) {
+                             // Update local state immediately for instant UI feedback
+                             const userId = form.querySelector('input[name="userId"]')?.value;
+                             const newRole = (e.target as HTMLSelectElement).value;
+                             if (userId && newRole) {
+                               const userIndex = localUsers.findIndex(u => u.id === userId);
+                               if (userIndex !== -1) {
+                                 localUsers[userIndex].role = newRole;
+                                 localUsers = [...localUsers];
+                               }
+                             }
+                             // Submit the form
+                             form.submit();
+                           }
+                         }}
+                       >
+                         <option value="user" selected={user.role === 'user'}>User</option>
+                         <option value="admin" selected={user.role === 'admin'}>Admin</option>
+                       </select>
+                     </form>
 
-                    <!-- Toggle Status -->
-                    <button
-                      type="button"
-                      onclick={() => showConfirm(user.disabled ? 'enable' : 'disable', user.id, user.email)}
-                      class="text-xs px-3 py-1 rounded-md transition-colors {user.disabled 
-                        ? 'bg-green-100 text-green-800 hover:bg-green-200' 
-                        : 'bg-red-100 text-red-800 hover:bg-red-200'}"
-                    >
-                      {user.disabled ? 'Enable' : 'Disable'}
-                    </button>
+                                         <!-- Toggle Status -->
+                     <button
+                       type="button"
+                       onclick={() => {
+                         // Update local state immediately for instant UI feedback
+                         const userIndex = localUsers.findIndex(u => u.id === user.id);
+                         if (userIndex !== -1) {
+                           localUsers[userIndex].disabled = !localUsers[userIndex].disabled;
+                           localUsers = [...localUsers];
+                         }
+                         showConfirm(user.disabled ? 'enable' : 'disable', user.id, user.email);
+                       }}
+                       class="text-xs px-3 py-1 rounded-md transition-colors {user.disabled 
+                         ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                         : 'bg-red-100 text-red-800 hover:bg-red-200'}"
+                     >
+                       {user.disabled ? 'Enable' : 'Disable'}
+                     </button>
                   </div>
                 </td>
               </tr>
@@ -350,15 +424,20 @@
               >
                 Cancel
               </button>
-              <form method="POST" action="?/toggleUserStatus" use:enhance class="inline">
-                <input type="hidden" name="userId" value={confirmUserId} />
-                <button
-                  type="submit"
-                  class="px-4 py-2 {confirmAction === 'disable' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white text-base font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 {confirmAction === 'disable' ? 'focus:ring-red-500' : 'focus:ring-green-500'}"
-                >
-                  {confirmAction === 'disable' ? 'Disable' : 'Enable'}
-                </button>
-              </form>
+                             <form method="POST" action="?/toggleUserStatus" use:enhance class="inline">
+                 <input type="hidden" name="userId" value={confirmUserId} />
+                 <button
+                   type="submit"
+                   onclick={() => {
+                     // The local state is already updated when the button was clicked
+                     // This ensures the UI stays consistent during form submission
+                     hideConfirm();
+                   }}
+                   class="px-4 py-2 {confirmAction === 'disable' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white text-base font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 {confirmAction === 'disable' ? 'focus:ring-red-500' : 'focus:ring-green-500'}"
+                 >
+                   {confirmAction === 'disable' ? 'Disable' : 'Enable'}
+                 </button>
+               </form>
             </div>
           </div>
         </div>
