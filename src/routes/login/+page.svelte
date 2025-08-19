@@ -45,8 +45,7 @@
 				{/if}
 				<form method="POST" action="?/register" class="w-full contents">
 					<div class="w-full flex flex-col items-center">
-						<input class="auth-input" type="text" name="firstName" placeholder="First name" />
-						<input class="auth-input" type="text" name="lastName" placeholder="Last name" />
+						<input class="auth-input" type="text" name="name" placeholder="Name" />
 						<input class="auth-input" type="email" name="email" placeholder="Email" required />
 						<input class="auth-input" type="password" name="password" placeholder="Password" required />
 						<button class="auth-btn" type="submit">Sign Up</button>

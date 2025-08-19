@@ -1,40 +1,63 @@
 import { fail, redirect } from '@sveltejs/kit';
+import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
-import { user, verificationToken, session, pendingUser } from '$lib/server/db/schema';
+import { user, session, verificationToken } from '$lib/server/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from 'crypto';
 import { sendOtpEmail } from '$lib/server/email';
 
-export const load = async ({ url }: any) => {
-  const email = String(url.searchParams.get('email') ?? '').trim().toLowerCase();
+export const load: PageServerLoad = async ({ url, cookies }) => {
+  const email = url.searchParams.get('email');
+  const sent = url.searchParams.get('sent');
+  const error = url.searchParams.get('error');
+  
   if (!email) {
-    console.log('[verify] No email provided, redirecting to login');
     throw redirect(303, '/login');
   }
 
-  console.log('[verify] Loading verification page for email:', email);
+  // ONLY redirect if user is already verified
+  // For ALL other cases, allow them to stay on verification page
+  try {
+    const [userRecord] = await db.select().from(user).where(eq(user.email, email));
+    
+    if (userRecord?.emailVerified) {
+      // User is already verified, redirect to appropriate page
+      const dest = userRecord.role === 'admin' ? '/dashboard' : '/user';
+      throw redirect(303, dest);
+    }
+  } catch (error) {
+    // If there's any database error, don't redirect - let user stay on verification page
+    console.log('[verify] Database error in load function, allowing user to stay on page:', error);
+  }
 
-  // Look up the most recent token (by expiry) to expose countdown to the client
-  const [token] = await db
-    .select()
-    .from(verificationToken)
-    .where(eq(verificationToken.identifier, email))
-    .orderBy(desc(verificationToken.expires))
-    .limit(1);
-  
-  const sent = url.searchParams.get('sent');
-  console.log('[verify] Token found:', !!token, 'sent:', sent);
-  
-  return { email, expiresAt: token?.expires?.toISOString?.() ?? null, sent: sent === '1' ? 1 : 0 };
+  // For all other cases (user not verified, user doesn't exist, database errors, etc.), 
+  // allow user to stay on verification page
+  let token = null;
+  try {
+    const [tokenResult] = await db
+      .select()
+      .from(verificationToken)
+      .where(eq(verificationToken.identifier, email))
+      .orderBy(desc(verificationToken.expires))
+      .limit(1);
+    token = tokenResult;
+  } catch (error) {
+    // If there's any database error with token lookup, don't redirect
+    console.log('[verify] Token lookup error in load function, allowing user to stay on page:', error);
+  }
+
+  return {
+    email,
+    expiresAt: token?.expires?.toISOString() ?? null,
+    sent: sent === '1' ? 1 : 0
+  };
 };
 
 export const actions = {
-  verify: async ({ request, cookies }: any) => {
+  verify: async ({ request, cookies, url }: { request: Request; cookies: any; url: URL }) => {
     const form = await request.formData();
     const email = String(form.get('email') ?? '').trim().toLowerCase();
     const code = String(form.get('code') ?? '').trim();
-
-    console.log('[verify] Attempting verification for email:', email, 'code length:', code.length);
 
     if (!email || !code) {
       console.log('[verify] Missing email or code');
@@ -51,47 +74,36 @@ export const actions = {
 
     console.log('[verify] Token found:', !!token, 'expires:', token?.expires, 'now:', now);
 
-    if (!token || token.expires < now) {
-      console.log('[verify] Token invalid or expired');
-      return fail(400, { error: true, message: 'Invalid or expired code.' });
+    if (!token) {
+      console.log('[verify] Token not found');
+      return fail(400, { error: true, message: 'Invalid verification code. Please check your code and try again.' });
     }
 
-    console.log('[verify] Token valid, proceeding with user creation/verification');
+    if (token.expires < now) {
+      console.log('[verify] Token expired');
+      return fail(400, { error: true, message: 'Verification code has expired. Please request a new code.' });
+    }
 
-    // Finalize user creation: move from pending_user to user if not exists
+    console.log('[verify] Token valid, proceeding with user verification');
+
+    // Mark user as verified
     const [existingUser] = await db.select().from(user).where(eq(user.email, email));
     if (!existingUser) {
-      console.log('[verify] No existing user, checking pending user');
-      const [pending] = await db.select().from(pendingUser).where(eq(pendingUser.email, email));
-      if (!pending) {
-        console.log('[verify] No pending user found');
-        return fail(400, { message: 'No pending registration found for this email.' });
-      }
-      
-      console.log('[verify] Creating user from pending user');
-      const userId = pending.id;
-      await db.insert(user).values({
-        id: userId,
-        email,
-        hashedPassword: pending.hashedPassword,
-        name: [pending.firstName, pending.lastName].filter(Boolean).join(' ') || null,
-        emailVerified: now
-      });
-      await db.delete(pendingUser).where(eq(pendingUser.email, email));
-      console.log('[verify] User created successfully');
-    } else {
-      console.log('[verify] Existing user found, marking as verified');
-      // Existing user path: just mark verified
-      await db.update(user).set({ emailVerified: now }).where(eq(user.email, email));
+      console.log('[verify] No user found');
+      return fail(400, { error: true, message: 'No user found for this email. Please complete your registration first.' });
     }
+    
+    console.log('[verify] Marking user as verified');
+    await db.update(user).set({ emailVerified: now }).where(eq(user.email, email));
+    console.log('[verify] User verified successfully');
     
     await db.delete(verificationToken).where(eq(verificationToken.identifier, email));
     console.log('[verify] Verification token deleted');
 
     const [u] = await db.select().from(user).where(eq(user.email, email));
     if (!u) {
-      console.error('[verify] User not found after creation/verification');
-      throw redirect(303, '/login');
+      console.error('[verify] User not found after verification');
+      return fail(500, { error: true, message: 'An error occurred during verification. Please try again.' });
     }
 
     console.log('[verify] Creating session for user:', u.id);
@@ -113,23 +125,28 @@ export const actions = {
     throw redirect(303, `/verify/success?dest=${encodeURIComponent(dest)}`);
   },
 
-  resend: async ({ request }: any) => {
+  resend: async ({ request }: { request: Request }) => {
     const form = await request.formData();
     const email = String(form.get('email') ?? '').trim().toLowerCase();
-    if (!email) return fail(400, { message: 'Email is required.' });
+    if (!email) return fail(400, { error: true, message: 'Email is required.' });
 
-    // Remove existing tokens for this email
-    await db.delete(verificationToken).where(eq(verificationToken.identifier, email));
+    try {
+      // Remove existing tokens for this email
+      await db.delete(verificationToken).where(eq(verificationToken.identifier, email));
 
-    // Generate and store a new 6-digit OTP with 10-minute expiry
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expires = new Date(Date.now() + 10 * 60 * 1000);
-    await db.insert(verificationToken).values({ identifier: email, token: otp, expires });
+      // Generate and store a new 6-digit OTP with 10-minute expiry
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expires = new Date(Date.now() + 10 * 60 * 1000);
+      await db.insert(verificationToken).values({ identifier: email, token: otp, expires });
 
-    await sendOtpEmail(email, otp);
+      await sendOtpEmail(email, otp);
 
-    // Return new expiry so the client can restart the timer without redirect
-    return { expiresAt: expires.toISOString() };
+      // Return new expiry so the client can restart the timer without redirect
+      return { expiresAt: expires.toISOString() };
+    } catch (error) {
+      console.error('[resend] Failed to resend code:', error);
+      return fail(500, { error: true, message: 'Failed to resend verification code. Please try again.' });
+    }
   }
 };
 
