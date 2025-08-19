@@ -1,6 +1,6 @@
 import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
-import { users, verificationToken } from '$lib/server/db/schema';
+import { user, verificationToken } from '$lib/server/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import { hash } from 'bcryptjs';
@@ -34,7 +34,7 @@ export const actions: Actions = {
 		}
 
 		const hashedPassword = await hash(password, 10);
-		await db.update(users).set({ hashedPassword }).where(eq(users.email, email));
+		await db.update(user).set({ hashedPassword }).where(eq(user.email, email));
 		await db.delete(verificationToken).where(and(eq(verificationToken.identifier, email), eq(verificationToken.token, token)));
 
 		throw redirect(303, '/login');

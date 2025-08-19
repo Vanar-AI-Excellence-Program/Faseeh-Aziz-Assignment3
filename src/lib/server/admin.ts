@@ -1,5 +1,5 @@
 import { db } from './db';
-import { users } from './db/schema';
+import { user } from './db/schema';
 
 export interface AdminUser {
   id: string;
@@ -33,11 +33,11 @@ export function validateRoleChange(currentRole: string, newRole: string): boolea
  */
 export async function getUserStats() {
   const allUsers = await db.select({ 
-    id: users.id, 
-    email: users.email, 
-    role: users.role, 
-    disabled: users.disabled 
-  }).from(users);
+    id: user.id, 
+    email: user.email, 
+    role: user.role, 
+    disabled: user.disabled 
+  }).from(user);
   
   return {
     total: allUsers.length,

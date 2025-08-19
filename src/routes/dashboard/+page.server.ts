@@ -1,6 +1,6 @@
 import type { PageServerLoad, Actions } from './$types';
 import { db } from '$lib/server/db';
-import { users, session } from '$lib/server/db/schema';
+import { user, session } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { redirect, fail } from '@sveltejs/kit';
 import { canModifyUser, validateRoleChange, getUserStats } from '$lib/server/admin';
@@ -36,7 +36,7 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
   const [sessionData] = await db.select().from(session).where(eq(session.sessionToken, sessionToken));
   if (!sessionData || sessionData.expires <= new Date()) throw redirect(303, '/login');
 
-  const [userData] = await db.select().from(users).where(eq(users.id, sessionData.userId));
+  const [userData] = await db.select().from(user).where(eq(user.id, sessionData.userId));
   if (!userData || userData.disabled || userData.role !== 'admin') throw redirect(303, '/');
 
   const stats = await getUserStats();
@@ -70,7 +70,7 @@ export const actions: Actions = {
       if (sessionToken) {
         const [sessionData] = await db.select().from(session).where(eq(session.sessionToken, sessionToken));
         if (sessionData && sessionData.expires > new Date()) {
-          const [userData] = await db.select().from(users).where(eq(users.id, sessionData.userId));
+          const [userData] = await db.select().from(user).where(eq(user.id, sessionData.userId));
           if (userData && userData.role === 'admin') {
             userRole = userData.role;
             userId = userData.id;
@@ -106,7 +106,7 @@ export const actions: Actions = {
     }
 
     try {
-      await db.update(users).set({ role: newRole }).where(eq(users.id, targetUserId));
+      await db.update(user).set({ role: newRole }).where(eq(user.id, targetUserId));
       return { success: true, message: `User role updated to ${newRole}` };
     } catch (error) {
       console.error('Error updating user role:', error);
@@ -131,7 +131,7 @@ export const actions: Actions = {
       if (sessionToken) {
         const [sessionData] = await db.select().from(session).where(eq(session.sessionToken, sessionToken));
         if (sessionData && sessionData.expires > new Date()) {
-          const [userData] = await db.select().from(users).where(eq(users.id, sessionData.userId));
+          const [userData] = await db.select().from(user).where(eq(user.id, sessionData.userId));
           if (userData && userData.role === 'admin') {
             userRole = userData.role;
             userId = userData.id;
@@ -168,7 +168,7 @@ export const actions: Actions = {
 
     try {
       const newStatus = action === 'disable';
-      await db.update(users).set({ disabled: newStatus }).where(eq(users.id, targetUserId));
+      await db.update(user).set({ disabled: newStatus }).where(eq(user.id, targetUserId));
       
       const statusText = newStatus ? 'disabled' : 'enabled';
       return { success: true, message: `User ${statusText} successfully` };
