@@ -18,7 +18,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     // Check content type and handle accordingly
     const contentType = request.headers.get('content-type') || '';
-    
+
     if (contentType.includes('multipart/form-data')) {
       // Handle form data (when file is uploaded)
       const formData = await request.formData();
@@ -71,7 +71,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         console.log('Using Google Generative AI API');
         // Use Google Generative AI API
         aiResponse = await callGoogleGenerativeAI(messages, uploadedFile);
-      } else {
+        } else {
         console.log('No Google Generative AI API key found, using basic responses');
         // Fall back to basic responses
         aiResponse = generateBasicResponse(messages);

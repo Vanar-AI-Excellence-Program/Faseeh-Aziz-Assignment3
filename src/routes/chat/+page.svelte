@@ -432,12 +432,19 @@
     
     <div class="flex-1 overflow-y-auto p-2">
       {#each chats as chat (chat.id)}
-        <button
-          type="button"
-          class={`p-3 rounded-lg mb-2 cursor-pointer group relative w-full text-left ${
+        <div
+          class={`p-3 rounded-lg mb-2 cursor-pointer group relative w-full ${
             activeChat?.id === chat.id ? 'bg-blue-100 text-blue-900' : 'hover:bg-gray-100'
           }`}
           onclick={() => selectChat(chat)}
+          role="button"
+          tabindex="0"
+          onkeydown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              selectChat(chat);
+            }
+          }}
         >
           {#if renamingChatId === chat.id}
             <input
@@ -470,7 +477,7 @@
               ✕
             </button>
           </div>
-        </button>
+        </div>
       {/each}
     </div>
   </div>

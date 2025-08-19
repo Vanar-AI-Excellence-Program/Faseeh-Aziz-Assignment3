@@ -1,15 +1,58 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { enhance } from '$app/forms';
+	import { browser } from '$app/environment';
 	export let data: { error?: { type: string; message: string; provider: string | null } };
 
 	let rightActive = false;
+	
+	// Check URL parameters to determine which panel to show
+	$: if (browser) {
+		if ($page.url.searchParams.get('signup') === '1') {
+			rightActive = true;
+		} else {
+			rightActive = false;
+		}
+	}
+	
 	// Keep the correct panel open based on which action failed
 	$: if ($page?.form?.action === 'register' && $page?.form?.error) {
 		rightActive = true;
 	}
-	$: if ($page?.form?.action === 'signin' && $page?.form?.error) {
+	$: if ($page?.form?.error && $page?.form?.action === 'signin') {
 		rightActive = false;
+	}
+	
+	// Functions to handle panel switching
+	function showLogin() {
+		rightActive = false;
+		// Update URL to remove signup parameter
+		window.history.replaceState({}, '', '/login');
+	}
+	
+	function showSignup() {
+		rightActive = true;
+		// Update URL to add signup parameter
+		window.history.replaceState({}, '', '/login?signup=1');
+	}
+	
+	// Handle browser back/forward buttons and page refresh
+	$: if (browser) {
+		// Set initial state based on current URL
+		if (window.location.search.includes('signup=1')) {
+			rightActive = true;
+		} else {
+			rightActive = false;
+		}
+		
+		// Listen for popstate events (back/forward buttons)
+		window.addEventListener('popstate', () => {
+			if (window.location.search.includes('signup=1')) {
+				rightActive = true;
+			} else {
+				rightActive = false;
+			}
+		});
 	}
 </script>
 
@@ -95,12 +138,12 @@
 				<div class="overlay-panel overlay-left">
 					<h1>Welcome Back!</h1>
 					<p>To keep connected with us please login with your personal info</p>
-					<button class="ghost" type="button" on:click={() => (rightActive = false)}>Sign In</button>
+					<button class="ghost" type="button" on:click={showLogin}>Sign In</button>
 				</div>
 				<div class="overlay-panel overlay-right">
 					<h1>Hello, Friend!</h1>
 					<p>Enter your personal details and start journey with us</p>
-					<button class="ghost" type="button" on:click={() => (rightActive = true)}>Sign Up</button>
+					<button class="ghost" type="button" on:click={showSignup}>Sign Up</button>
 				</div>
 			</div>
 		</div>
