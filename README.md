@@ -99,7 +99,7 @@ src/
 ### 1. Clone the Repository
 ```bash
 git clone <repository-url>
-cd A2
+cd Authapp
 ```
 
 ### 2. Install Dependencies
