@@ -18,37 +18,17 @@
 
 <div data-theme={theme} class="min-h-dvh bg-gradient-to-b from-indigo-50 to-white text-gray-900">
   {#if $page.url.pathname !== "/"}
-    <!-- Header (hidden on home) -->
+    <!-- Minimal header with Back to Home -->
     <header class="sticky top-0 z-40 border-b bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
       <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-6 lg:px-8">
-        <!-- Brand -->
-        <a href="/" class="flex items-center gap-2 font-semibold">
+        <div class="flex items-center gap-2">
           <img src={favicon} alt="App" class="size-5" />
-          <span class="text-indigo-700">Auth App</span>
+          <span class="sr-only">App</span>
+        </div>
+        <a href="/" class="inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold text-white shadow-sm cursor-pointer"
+           style="background:#00ABE4;">
+          Back to Home
         </a>
-
-        <!-- Nav -->
-        <nav class="flex items-center gap-2 md:gap-4">
-          {#if $page.data.viewer}
-            <a 
-              href="/post-auth" 
-              class="btn btn-primary rounded-full px-3 py-1.5 text-sm"
-            >
-              Dashboard
-            </a>
-            <a href="/chat" class="nav-link">Chat</a>
-            <a href="/settings" class="nav-link">Settings</a>
-            <button 
-              onclick={handleLogout}
-              class="btn-outline rounded-full px-3 py-1.5 text-sm cursor-pointer"
-            >
-              Logout
-            </button>
-          {:else}
-            <a href="/login" class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer">Login</a>
-            <a href="/register" class="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer">Register</a>
-          {/if}
-        </nav>
       </div>
     </header>
   {/if}
