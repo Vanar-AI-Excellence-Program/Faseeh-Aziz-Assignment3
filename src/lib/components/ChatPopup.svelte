@@ -28,10 +28,24 @@
 
     loading = true;
     try {
+      // Validate messages before sending
+      const validMessages = messages.filter(msg => 
+        msg && 
+        typeof msg === 'object' && 
+        typeof msg.role === 'string' && 
+        ['user', 'assistant', 'system'].includes(msg.role) &&
+        typeof msg.content === 'string' && 
+        msg.content.trim().length > 0
+      );
+
+      if (validMessages.length === 0) {
+        throw new Error('No valid messages to send');
+      }
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messages: messages.map(({ role, content }) => ({ role, content })) })
+        body: JSON.stringify({ messages: validMessages.map(({ role, content }) => ({ role, content })) })
       });
 
       if (!res.ok) {
@@ -105,7 +119,7 @@
 
 <!-- Launcher Button -->
 <button
-  class="fixed bottom-4 right-4 z-50 rounded-full bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 focus:outline-none"
+  class="fixed bottom-4 right-4 z-50 rounded-full bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 focus:outline-none cursor-pointer"
   on:click={toggle}
 >
   {isOpen ? 'Close Chat' : 'Chat'}
@@ -115,7 +129,7 @@
   <div class="fixed bottom-16 right-4 z-50 w-full max-w-sm rounded-xl bg-white popup-shadow border">
     <div class="flex items-center justify-between border-b px-4 py-3">
       <div class="font-semibold text-gray-800">{title}</div>
-      <button class="text-gray-500 hover:text-gray-700" on:click={toggle}>✕</button>
+      <button class="text-gray-500 hover:text-gray-700 cursor-pointer" on:click={toggle}>✕</button>
     </div>
 
     <div class="h-72 overflow-y-auto px-4 py-3 space-y-3">
@@ -146,7 +160,7 @@
           on:keydown={onKeyDown}
         ></textarea>
         <button
-          class="btn btn-primary px-3 py-2 text-sm"
+          class="btn btn-primary px-3 py-2 text-sm cursor-pointer"
           on:click={sendMessage}
           disabled={loading}
         >

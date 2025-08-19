@@ -1,12 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, afterUpdate } from 'svelte';
   import { browser } from '$app/environment';
 
   export let data: {
     user: { id: string; name?: string | null; email?: string | null; role?: string | null };
+    chats: any[];
+    messages: any[];
   };
 
-  type Message = { id: string; role: 'user' | 'assistant'; content: string; timestamp: Date };
+  type Message = { id: string; role: 'user' | 'assistant'; content: string; timestamp: Date; parentId?: string | null };
   type Chat = { id: string; title: string; messages: Message[]; createdAt: Date };
 
   let chats: Chat[] = [];
@@ -17,49 +19,78 @@
   let fileInput: HTMLInputElement;
   let uploadedFile: File | null = null;
   let sidebarOpen = true;
+  let replyToMessageId: string | null = null;
   let renamingChatId: string | null = null;
   let renameInput = '';
+  $: replyToMessage = activeChat?.messages.find((m) => m.id === replyToMessageId) || null;
+
+  // Minimal action to inject trusted HTML (generated locally)
+  export function setHtml(node: HTMLElement, params: { html: string }) {
+    const set = (html: string) => {
+      node.innerHTML = html;
+    };
+    set(params?.html || '');
+    return {
+      update(next: { html: string }) {
+        set(next?.html || '');
+      }
+    };
+  }
+
+  function escapeHtml(s: string): string {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function renderMarkdownLite(src: string): string {
+    let text = src || '';
+    // Code fences ```lang\ncode\n```
+    text = text.replace(/```([a-zA-Z0-9+-]*)\n([\s\S]*?)```/g, (_m, lang, code) => {
+      const cls = lang ? ` class="language-${lang}"` : '';
+      return `<pre><code${cls}>${escapeHtml(code.trim())}</code></pre>`;
+    });
+    // Inline code `code`
+    text = text.replace(/`([^`]+)`/g, (_m, code) => `<code>${escapeHtml(code)}</code>`);
+    // Bold **text**
+    text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    // Simple paragraphs/line breaks
+    const lines = text.split('\n');
+    return lines.map((l) => (l.trim() ? `<p>${l}</p>` : '<p><br/></p>')).join('');
+  }
 
   // Auto-scroll to bottom
   let messagesContainer: HTMLDivElement;
 
   onMount(() => {
-    loadChatsFromStorage();
-    if (chats.length === 0) {
-      createNewChat();
+    // Convert DB data to local format
+    if (data.chats && data.chats.length > 0) {
+      chats = data.chats.map((chat: any) => ({
+        id: chat.id,
+        title: chat.title,
+        createdAt: new Date(chat.createdAt),
+        messages: []
+      }));
+      
+      // Load messages for the first chat
+      if (data.messages && data.messages.length > 0) {
+        const firstChat = chats[0];
+        firstChat.messages = data.messages.map((msg: any) => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: new Date(msg.createdAt),
+          parentId: msg.parentId
+        }));
+        activeChat = firstChat;
+      } else {
+        activeChat = chats[0];
+      }
     } else {
-      activeChat = chats[0];
+      createNewChat();
     }
   });
-
-  function loadChatsFromStorage() {
-    if (!browser) return;
-    try {
-      const stored = localStorage.getItem(`chats_${data.user.id}`);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        chats = parsed.map((chat: any) => ({
-          ...chat,
-          createdAt: new Date(chat.createdAt),
-          messages: chat.messages.map((msg: any) => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp)
-          }))
-        }));
-      }
-    } catch (e) {
-      console.error('Failed to load chats:', e);
-    }
-  }
-
-  function saveChatsToStorage() {
-    if (!browser) return;
-    try {
-      localStorage.setItem(`chats_${data.user.id}`, JSON.stringify(chats));
-    } catch (e) {
-      console.error('Failed to save chats:', e);
-    }
-  }
 
   function createNewChat() {
     const newChat: Chat = {
@@ -70,14 +101,26 @@
     };
     chats = [newChat, ...chats];
     activeChat = newChat;
-    saveChatsToStorage();
+    
+    // Save to DB
+    fetch('/api/chat/create', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: newChat.id, title: newChat.title })
+    }).catch(console.error);
   }
 
   function selectChat(chat: Chat) {
-    activeChat = chat;
+    activeChat = null;
+    // force DOM reset before setting the new chat to ensure formatting action runs
+    setTimeout(() => {
+      activeChat = chat;
+      // ensure we scroll to bottom of the newly selected chat
+      scrollToBottom();
+    }, 0);
   }
 
-  function deleteChat(chatId: string) {
+  async function deleteChat(chatId: string) {
     chats = chats.filter(c => c.id !== chatId);
     if (activeChat?.id === chatId) {
       activeChat = chats[0] || null;
@@ -85,7 +128,17 @@
         createNewChat();
       }
     }
-    saveChatsToStorage();
+    
+    // Delete from DB
+    try {
+      await fetch('/api/chat/delete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: chatId })
+      });
+    } catch (e) {
+      console.error('Failed to delete chat:', e);
+    }
   }
 
   function handleFileSelect(event: Event) {
@@ -101,9 +154,31 @@
     if (fileInput) fileInput.value = '';
   }
 
+  function getParentMessageContent(msg: Message): string | null {
+    if (!msg.parentId || !activeChat) return null;
+    const parent = activeChat.messages.find((m) => m.id === msg.parentId);
+    return parent ? parent.content : null;
+  }
+
+  function getParentPreview(msg: Message, maxLen = 160): string | null {
+    const c = getParentMessageContent(msg);
+    if (!c) return null;
+    const t = c.replace(/\s+/g, ' ').trim();
+    return t.length > maxLen ? t.slice(0, maxLen) + '…' : t;
+  }
+
+  function isForkedMessage(chat: Chat | null, index: number, msg: Message): boolean {
+    if (!chat || !msg.parentId) return false;
+    const prev = chat.messages[index - 1];
+    return !prev || msg.parentId !== prev.id;
+  }
+
   async function sendMessage() {
     const text = input.trim();
     if (!text || loading || !activeChat) return;
+    
+    console.log('Sending message with text:', text);
+    console.log('Active chat messages count:', activeChat.messages.length);
     
     input = '';
     error = null;
@@ -115,21 +190,92 @@
       timestamp: new Date()
     };
 
+    console.log('Created userMsg:', userMsg);
+
     // Update chat title if it's the first message
     if (activeChat.messages.length === 0) {
       activeChat.title = text.length > 50 ? text.substring(0, 50) + '...' : text;
     }
 
-    activeChat.messages = [...activeChat.messages, userMsg];
-    chats = chats.map(c => c.id === activeChat?.id ? activeChat : c);
-    saveChatsToStorage();
+    // compute parent for tree fork
+    const parentId = replyToMessageId ?? (activeChat.messages.length > 0 ? activeChat.messages[activeChat.messages.length - 1].id : null);
 
     loading = true;
     scrollToBottom();
 
     try {
+      // Build branch context for forked messages
+      const branchMessages = (() => {
+        if (replyToMessageId) {
+          // If we're replying to a specific message, build context from that message
+          const byId = new Map(activeChat.messages.map((m) => [m.id, m] as const));
+          const chain: Message[] = [];
+          const visited = new Set<string>();
+          
+          // Start from the message we're replying to
+          let cur: Message | undefined = byId.get(replyToMessageId);
+          while (cur && !visited.has(cur.id)) {
+            chain.push(cur);
+            visited.add(cur.id);
+            if (cur.parentId) {
+              cur = byId.get(cur.parentId);
+            } else {
+              break;
+            }
+          }
+          
+          // Reverse to get chronological order and add the new user message
+          chain.reverse();
+          chain.push(userMsg);
+          
+          console.log('Fork context:', { replyToMessageId, chain: chain.map(m => ({ role: m.role, content: m.content.substring(0, 50) })) });
+          return chain.map(({ role, content }) => ({ role, content }));
+        } else {
+          // Normal linear conversation - send all messages plus the new user message
+          const allMessages = [...activeChat.messages, userMsg];
+          console.log('Normal conversation - all messages:', allMessages.map(m => ({ role: m.role, content: m.content.substring(0, 50) })));
+          return allMessages.map(({ role, content }) => ({ role, content }));
+        }
+      })();
+
+      console.log('Branch messages before validation:', branchMessages);
+
+      // Validate messages before sending
+      const validBranchMessages = branchMessages.filter(msg => 
+        msg && 
+        typeof msg === 'object' && 
+        typeof msg.role === 'string' && 
+        ['user', 'assistant', 'system'].includes(msg.role) &&
+        typeof msg.content === 'string' && 
+        msg.content.trim().length > 0
+      );
+
+      console.log('Valid branch messages after filtering:', validBranchMessages);
+
+      if (validBranchMessages.length === 0) {
+        console.error('No valid messages to send. Branch messages:', branchMessages);
+        throw new Error('No valid messages to send');
+      }
+
+      // Ensure at least one user message exists
+      const hasUserMessage = validBranchMessages.some(msg => msg.role === 'user');
+      if (!hasUserMessage) {
+        console.error('No user message found in valid messages:', validBranchMessages);
+        throw new Error('At least one user message is required');
+      }
+
+      console.log('Sending messages:', validBranchMessages.length, 'valid messages');
+
+      // Add the user message to the chat now that we have the context
+      const userMessageWithParent = { ...userMsg, parentId };
+      activeChat.messages = [...activeChat.messages, userMessageWithParent];
+      chats = chats.map(c => c.id === activeChat?.id ? activeChat : c);
+      
+      // Clear reply banner after adding message
+      replyToMessageId = null;
+
       const formData = new FormData();
-      formData.append('messages', JSON.stringify(activeChat.messages.map(({ role, content }) => ({ role, content }))));
+      formData.append('messages', JSON.stringify(validBranchMessages));
       
       if (uploadedFile) {
         formData.append('file', uploadedFile);
@@ -137,9 +283,7 @@
 
       const res = await fetch('/api/chat', {
         method: 'POST',
-        body: uploadedFile ? formData : JSON.stringify({ 
-          messages: activeChat.messages.map(({ role, content }) => ({ role, content })) 
-        }),
+        body: uploadedFile ? formData : JSON.stringify({ messages: validBranchMessages }),
         headers: uploadedFile ? {} : { 'content-type': 'application/json' }
       });
 
@@ -158,7 +302,8 @@
         id: assistantId, 
         role: 'assistant', 
         content: '',
-        timestamp: new Date()
+        timestamp: new Date(),
+        parentId: userMsg.id
       };
       
       activeChat.messages = [...activeChat.messages, assistantMsg];
@@ -173,25 +318,53 @@
           const lines = chunk.split('\n');
           
           for (const line of lines) {
-            if (line.startsWith('0:"')) {
-              const match = line.match(/^0:"(.*)"/);
-              if (match) {
-                assistantText += match[1];
-                // Update the message in real-time
-                activeChat.messages = activeChat.messages.map(m => 
-                  m.id === assistantId 
-                    ? { ...m, content: assistantText }
-                    : m
+            const m = line.match(/^0:(.*)$/);
+            if (m) {
+              try {
+                const decoded = JSON.parse(m[1]);
+                assistantText += decoded;
+                activeChat.messages = activeChat.messages.map((msg) =>
+                  msg.id === assistantId ? { ...msg, content: assistantText } : msg
                 );
-                chats = chats.map(c => c.id === activeChat?.id ? activeChat : c);
+                chats = chats.map((c) => (c.id === activeChat?.id ? activeChat : c));
                 scrollToBottom();
+              } catch (_) {
+                // ignore malformed lines
               }
             }
           }
         }
       }
 
-      saveChatsToStorage();
+      // Save messages to DB
+      try {
+        await fetch('/api/chat/message', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            id: userMsg.id,
+            chatId: activeChat.id,
+            parentId: parentId, // Use the computed parentId
+            role: userMsg.role,
+            content: userMsg.content
+          })
+        });
+        
+        await fetch('/api/chat/message', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            id: assistantId,
+            chatId: activeChat.id,
+            parentId: userMsg.id,
+            role: 'assistant',
+            content: assistantText
+          })
+        });
+      } catch (e) {
+        console.error('Failed to save messages:', e);
+      }
+
       removeFile();
     } catch (e: any) {
       error = e?.message ?? 'Unknown error';
@@ -208,11 +381,24 @@
     }, 10);
   }
 
+  // After initial mount or refresh, jump to bottom if there are messages
+  let didInitialScroll = false;
+  afterUpdate(() => {
+    if (!didInitialScroll && activeChat && activeChat.messages.length > 0) {
+      scrollToBottom();
+      didInitialScroll = true;
+    }
+  });
+
   function onKeyDown(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
+  }
+
+  function setReplyTarget(id: string) {
+    replyToMessageId = id === replyToMessageId ? null : id;
   }
 
   function formatTime(date: Date) {
@@ -235,7 +421,6 @@
 
     c.title = title;
     chats = chats.map((x) => (x.id === c.id ? { ...x, title } : x));
-    saveChatsToStorage();
 
     try {
       await fetch('/api/chat/rename', {
@@ -243,17 +428,19 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id: c.id, title })
       });
-    } catch {}
+    } catch (e) {
+      console.error('Failed to rename chat:', e);
+    }
   }
 </script>
 
-<div class="flex h-screen bg-white">
+<div class="fixed inset-0 flex bg-white pt-16">
   <!-- Sidebar -->
-  <div class={`${sidebarOpen ? 'w-72' : 'w-0'} transition-all duration-300 overflow-hidden bg-gray-50 border-r border-gray-200 flex flex-col`}>
+  <div class={`${sidebarOpen ? 'w-72' : 'w-0'} transition-all duration-300 overflow-hidden bg-gray-50 border-r border-gray-200 flex flex-col min-h-0`}>
     <div class="p-4 border-b border-gray-200">
       <button
         onclick={createNewChat}
-        class="w-full btn btn-primary rounded-lg px-4 py-2 text-sm flex items-center justify-center gap-2"
+        class="w-full btn btn-primary rounded-lg px-4 py-2 text-sm flex items-center justify-center gap-2 cursor-pointer"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
@@ -263,7 +450,7 @@
     </div>
     
     <div class="flex-1 overflow-y-auto p-2">
-      {#each chats as chat}
+      {#each chats as chat (chat.id)}
         <div
           class={`p-3 rounded-lg mb-2 cursor-pointer group relative ${
             activeChat?.id === chat.id ? 'bg-indigo-100 text-indigo-900' : 'hover:bg-gray-100'
@@ -287,14 +474,14 @@
           <div class="text-xs text-gray-500 mt-1">{chat.createdAt.toLocaleDateString()}</div>
           <button
             onclick={(e) => { e.stopPropagation(); deleteChat(chat.id); }}
-            class="absolute top-2 right-2 text-red-500 hover:text-red-700 text-xs"
+            class="absolute top-2 right-2 text-red-500 hover:text-red-700 text-xs cursor-pointer"
             aria-label="Delete chat"
           >
             ✕
           </button>
           <button
             onclick={(e) => { e.stopPropagation(); startRename(chat); }}
-            class="absolute top-2 right-8 text-gray-500 hover:text-gray-700 text-xs"
+            class="absolute top-2 right-8 text-gray-500 hover:text-gray-700 text-xs cursor-pointer"
             aria-label="Rename chat"
           >
             ✎
@@ -305,11 +492,11 @@
   </div>
 
   <!-- Main Chat Area -->
-  <div class="flex-1 flex flex-col">
+  <div class="flex-1 flex flex-col min-h-0">
     <!-- Header -->
     <header class="border-b border-gray-200 p-4 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <button onclick={toggleSidebar} class="text-gray-500 hover:text-gray-700">
+        <button onclick={toggleSidebar} class="text-gray-500 hover:text-gray-700 cursor-pointer">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
           </svg>
@@ -325,30 +512,57 @@
 
     <!-- Messages -->
     <div bind:this={messagesContainer} class="flex-1 overflow-y-auto p-4 space-y-4">
-      {#if !activeChat || activeChat.messages.length === 0}
-        <div class="text-center text-gray-500 mt-20">
-          <div class="text-4xl mb-4">💬</div>
-          <h2 class="text-xl font-semibold mb-2">Start a conversation</h2>
-          <p>Ask me anything about your app, or any general question!</p>
-        </div>
-      {:else}
-        {#each activeChat.messages as message}
-          <div class={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div class="max-w-3xl">
-              <div class={`rounded-2xl px-4 py-3 ${
-                message.role === 'user' 
-                  ? 'bg-indigo-600 text-white' 
-                  : 'bg-gray-100 text-gray-900'
-              }`}>
-                <div class="whitespace-pre-wrap">{message.content.replace(/\\n/g, '\n')}</div>
-              </div>
-              <div class={`text-xs text-gray-500 mt-1 ${message.role === 'user' ? 'text-right' : 'text-left'}`}>
-                {formatTime(message.timestamp)}
+      {#key activeChat?.id}
+        {#if !activeChat || activeChat.messages.length === 0}
+          <div class="text-center text-gray-500 mt-20">
+            <div class="text-4xl mb-4">💬</div>
+            <h2 class="text-xl font-semibold mb-2">Start a conversation</h2>
+            <p>Ask me anything about your app, or any general question!</p>
+          </div>
+        {:else}
+          {#each activeChat.messages as message, i (`${activeChat.id}-${message.id}`)}
+            <div class={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div class="max-w-3xl">
+                <div class="flex items-start gap-2">
+                  <button
+                    class="mt-1 text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                    title="Fork from this message"
+                    aria-label="Fork from this message"
+                    onclick={() => setReplyTarget(message.id)}
+                  >
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 3v6a3 3 0 0 0 3 3h6"/>
+                      <circle cx="6" cy="3" r="2"/>
+                      <circle cx="18" cy="12" r="2"/>
+                      <circle cx="6" cy="21" r="2"/>
+                      <path d="M9 15a3 3 0 0 0-3 3v3"/>
+                    </svg>
+                  </button>
+                  <div class={`rounded-2xl px-4 py-3 ${
+                    message.role === 'user' 
+                      ? 'bg-indigo-600 text-white' 
+                      : 'bg-gray-100 text-gray-900'
+                  }`}>
+                    {#if isForkedMessage(activeChat, i, message)}
+                      <div class="mb-2 text-xs text-gray-500 italic">
+                        Forked from: {getParentPreview(message) || 'previous message'}
+                      </div>
+                    {/if}
+                    {#if message.role === 'assistant'}
+                      <div class="prose prose-sm max-w-none" use:setHtml={{ html: renderMarkdownLite(message.content) }}></div>
+                    {:else}
+                      <div class="whitespace-pre-wrap">{message.content.replace(/\n/g, '\n')}</div>
+                    {/if}
+                  </div>
+                </div>
+                <div class={`text-xs text-gray-500 mt-1 ${message.role === 'user' ? 'text-right' : 'text-left'}`}>
+                  {formatTime(message.timestamp)}
+                </div>
               </div>
             </div>
-          </div>
-        {/each}
-      {/if}
+          {/each}
+        {/if}
+      {/key}
       
       {#if loading}
         <div class="flex justify-start">
@@ -371,6 +585,25 @@
 
     <!-- Input Area -->
     <div class="border-t border-gray-200 p-4">
+      {#if replyToMessage}
+        <div class="mb-3 p-3 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-900 flex items-start justify-between gap-3">
+          <div class="flex items-start gap-2">
+            <svg class="w-4 h-4 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 3v6a3 3 0 0 0 3 3h6"/>
+              <circle cx="6" cy="3" r="2"/>
+              <circle cx="18" cy="12" r="2"/>
+              <circle cx="6" cy="21" r="2"/>
+              <path d="M9 15a3 3 0 0 0-3 3v3"/>
+            </svg>
+            <div class="text-sm max-w-[80ch] truncate">
+              Replying to: {replyToMessage.content}
+            </div>
+          </div>
+          <button class="text-indigo-700 hover:text-indigo-900 cursor-pointer" aria-label="Cancel reply" title="Cancel reply" onclick={() => (replyToMessageId = null)}>
+            ✕
+          </button>
+        </div>
+      {/if}
       {#if uploadedFile}
         <div class="mb-3 p-3 bg-blue-50 rounded-lg flex items-center justify-between">
           <div class="flex items-center gap-2">
@@ -379,7 +612,7 @@
             </svg>
             <span class="text-sm text-blue-900">{uploadedFile.name}</span>
           </div>
-          <button onclick={removeFile} class="text-red-500 hover:text-red-700">
+          <button onclick={removeFile} class="text-red-500 hover:text-red-700 cursor-pointer">
             ✕
           </button>
         </div>
@@ -407,7 +640,7 @@
           />
           <button
             onclick={() => fileInput?.click()}
-            class="p-3 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+            class="p-3 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
             title="Upload file"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -418,7 +651,7 @@
           <button
             onclick={sendMessage}
             disabled={loading || (!input.trim() && !uploadedFile)}
-            class="p-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            class="p-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>

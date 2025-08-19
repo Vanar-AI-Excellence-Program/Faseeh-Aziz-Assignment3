@@ -4,7 +4,7 @@ import { chat } from '$lib/server/db/schema';
 import { and, eq } from 'drizzle-orm';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-  const session = await locals.auth?.();
+  const session = await locals.auth();
   if (!session?.user?.id) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }

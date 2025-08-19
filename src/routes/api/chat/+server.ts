@@ -17,7 +17,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       const file = formData.get('file') as File;
       
       if (messagesStr) {
-        messages = JSON.parse(messagesStr);
+        try {
+          messages = JSON.parse(messagesStr);
+        } catch (e) {
+          console.error('Failed to parse messages from form data:', e);
+          return new Response(JSON.stringify({ error: 'Invalid message format' }), {
+            status: 400,
+            headers: { 'content-type': 'application/json' }
+          });
+        }
       }
       
       if (file) {
@@ -37,6 +45,52 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       const body = await request.json().catch(() => ({ messages: [] }));
       messages = body.messages ?? [];
     }
+
+    // Validate and filter messages
+    if (!Array.isArray(messages)) {
+      console.error('Messages is not an array:', typeof messages, messages);
+      return new Response(JSON.stringify({ error: 'Messages must be an array' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+
+    console.log('Raw messages received:', messages.length, 'messages');
+    console.log('Message structure sample:', messages.slice(0, 2));
+
+    // Filter out invalid messages and ensure content is not empty
+    const validMessages = messages.filter(msg => 
+      msg && 
+      typeof msg === 'object' && 
+      typeof msg.role === 'string' && 
+      ['user', 'assistant', 'system'].includes(msg.role) &&
+      typeof msg.content === 'string' && 
+      msg.content.trim().length > 0
+    );
+
+    console.log('Valid messages after filtering:', validMessages.length, 'messages');
+    console.log('Valid message structure sample:', validMessages.slice(0, 2));
+
+    if (validMessages.length === 0) {
+      console.error('No valid messages after filtering. Original messages:', messages);
+      return new Response(JSON.stringify({ error: 'No valid messages provided' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+
+    // Ensure at least one user message exists
+    const hasUserMessage = validMessages.some(msg => msg.role === 'user');
+    if (!hasUserMessage) {
+      console.error('No user message found in valid messages:', validMessages);
+      return new Response(JSON.stringify({ error: 'At least one user message is required' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+
+    console.log('Valid messages to send:', validMessages.length, 'messages');
+    console.log('Message roles:', validMessages.map(m => m.role));
 
     const apiKey =
       STATIC_GEMINI_API_KEY ||
@@ -66,7 +120,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     const result = await streamText({
       model,
-      messages,
+      messages: validMessages,
       system:
         'You are a helpful AI assistant. Provide concise, accurate, and helpful responses to any questions or requests. Be conversational and friendly.',
     });
@@ -74,6 +128,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     const stream = result.toAIStreamResponse();
     return stream;
   } catch (error: any) {
+    console.error('Chat API error:', error);
     return new Response(JSON.stringify({ error: error?.message ?? 'Unknown error' }), {
       status: 500,
       headers: { 'content-type': 'application/json' }

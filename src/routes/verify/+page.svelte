@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  type PageData = { email: string; expiresAt: string | null };
+  import { enhance } from '$app/forms';
+  import { page } from '$app/stores';
+  
+  type PageData = { email: string; expiresAt: string | null; sent?: number };
   export let data: PageData;
   let code: string = "";
   let codeInput: HTMLInputElement | null = null;
@@ -52,9 +55,17 @@
   <div class="w-full max-w-md">
     <h1 class="text-center text-4xl font-extrabold tracking-tight text-gray-900 md:text-5xl">Verify your email</h1>
     <p class="mt-2 text-center text-gray-600">A verification code has been sent to {data.email}.</p>
+    {#if data.sent === 0}
+      <div class="mt-3 rounded bg-yellow-50 border border-yellow-200 px-3 py-2 text-sm text-yellow-800">
+        We couldn't send the email right now, but you can still enter the code if you received it, or press "Resend code".
+      </div>
+    {/if}
 
     <div class="card mt-6 p-6">
       <h2 class="mb-2 text-xl font-semibold">Enter verification code</h2>
+      {#if $page.form?.error}
+        <div class="mb-3 rounded bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{$page.form.message}</div>
+      {/if}
       <form method="POST" action="?/verify" class="space-y-4">
         <input type="hidden" name="email" value={data.email} />
         <div class="space-y-2">

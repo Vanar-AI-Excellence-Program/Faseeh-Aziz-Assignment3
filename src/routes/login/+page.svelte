@@ -1,10 +1,16 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { enhance } from '$app/forms';
 	export let data: { error?: { type: string; message: string; provider: string | null } };
-	let formMessage: string | undefined;
-	$: formMessage = (/** @type {any} */ ($page))?.form?.message as string | undefined;
 
 	let rightActive = false;
+	// Keep the correct panel open based on which action failed
+	$: if ($page?.form?.action === 'register' && $page?.form?.error) {
+		rightActive = true;
+	}
+	$: if ($page?.form?.action === 'signin' && $page?.form?.error) {
+		rightActive = false;
+	}
 </script>
 
 <svelte:head>
@@ -34,7 +40,10 @@
 					</form>
 				</div>
 				<span>or use your email for registration</span>
-				<form method="POST" action="?/register" use:enhance class="w-full contents">
+				{#if $page.form?.action === 'register' && $page.form?.error}
+					<div class="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{$page.form.message}</div>
+				{/if}
+				<form method="POST" action="?/register" class="w-full contents">
 					<div class="w-full flex flex-col items-center">
 						<input class="auth-input" type="text" name="firstName" placeholder="First name" />
 						<input class="auth-input" type="text" name="lastName" placeholder="Last name" />
@@ -62,18 +71,11 @@
 						</button>
 					</form>
 				</div>
-				{#if $page.form?.action === 'register' && $page.form?.error}
-					<div class="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{$page.form.message}</div>
-				{/if}
-
 				{#if $page.form?.action === 'signin' && $page.form?.error}
 					<div class="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{$page.form.message}</div>
 				{/if}
 				{#if data.error?.type === 'auth_error'}
 					<div class="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{data.error.message}</div>
-				{/if}
-				{#if formMessage}
-					<div class="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{formMessage}</div>
 				{/if}
 				<form method="POST" action="?/signin" class="w-full contents" use:enhance>
 					<div class="w-full flex flex-col items-center">
