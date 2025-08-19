@@ -8,8 +8,8 @@ export const POST: RequestHandler = async ({ cookies }) => {
 	cookies.delete('authjs.callback-url', { path: '/' });
 	cookies.delete('authjs.pkce.code_verifier', { path: '/' });
 	
-	// Redirect to login page
-	throw redirect(302, '/login');
+	// Redirect to homepage
+	throw redirect(302, '/');
 };
 
 export const GET: RequestHandler = async ({ cookies }) => {
@@ -19,7 +19,7 @@ export const GET: RequestHandler = async ({ cookies }) => {
 	cookies.delete('authjs.callback-url', { path: '/' });
 	cookies.delete('authjs.pkce.code_verifier', { path: '/' });
 	
-	throw redirect(302, '/login');
+	throw redirect(302, '/');
 };
 
 
