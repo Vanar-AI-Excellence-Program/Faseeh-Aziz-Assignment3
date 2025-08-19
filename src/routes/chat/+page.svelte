@@ -432,8 +432,9 @@
     
     <div class="flex-1 overflow-y-auto p-2">
       {#each chats as chat (chat.id)}
-        <div
-          class={`p-3 rounded-lg mb-2 cursor-pointer group relative ${
+        <button
+          type="button"
+          class={`p-3 rounded-lg mb-2 cursor-pointer group relative w-full text-left ${
             activeChat?.id === chat.id ? 'bg-blue-100 text-blue-900' : 'hover:bg-gray-100'
           }`}
           onclick={() => selectChat(chat)}
@@ -447,7 +448,7 @@
                 else if (e.key === 'Escape') { renamingChatId = null; }
               }}
               onblur={() => confirmRename(chat)}
-              autofocus
+
             />
           {:else}
             <div class="text-sm font-medium truncate">{chat.title}</div>
@@ -469,7 +470,7 @@
               ✕
             </button>
           </div>
-        </div>
+        </button>
       {/each}
     </div>
   </div>
@@ -601,6 +602,7 @@
              onclick={sendMessage}
              disabled={loading || !input.trim()}
              class="p-3 bg-green-600 text-white rounded-full hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+             aria-label="Send message"
            >
              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>

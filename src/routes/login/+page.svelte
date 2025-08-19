@@ -135,7 +135,6 @@
 .social-container{margin:18px 0 10px}
 .social{border:1px solid #DDD;border-radius:50%;display:inline-flex;justify-content:center;align-items:center;margin:0 8px;height:44px;width:44px;cursor:pointer;background:#fff;color:#444}
 .auth-form h1{font-weight:800;font-size:42px;line-height:1.1;margin-bottom:8px}
-label{font-weight:600}
 .auth-form a{margin:8px 0 16px;color:#555}
 /* Right gradient panel typography */
 .overlay-panel h1{font-weight:800;font-size:44px;line-height:1.1;margin:0 0 14px;color:#fff}
