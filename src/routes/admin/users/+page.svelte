@@ -356,11 +356,13 @@
                            localUsers[userIndex].disabled = !localUsers[userIndex].disabled;
                            localUsers = [...localUsers];
                          }
-                         showConfirm(user.disabled ? 'enable' : 'disable', user.id, user.email);
+                         // Use the updated local state to determine the action
+                         const updatedUser = localUsers[userIndex];
+                         showConfirm(updatedUser.disabled ? 'enable' : 'disable', user.id, user.email);
                        }}
                        class="text-xs px-3 py-1 rounded-md transition-colors {user.disabled 
                          ? 'bg-green-100 text-green-800 hover:bg-green-200' 
-                         : 'bg-red-100 text-red-800 hover:bg-red-200'}"
+                         : 'bg-red-200 text-red-800 hover:bg-red-300'}"
                      >
                        {user.disabled ? 'Enable' : 'Disable'}
                      </button>

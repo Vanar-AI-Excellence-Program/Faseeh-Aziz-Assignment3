@@ -150,8 +150,11 @@ export const actions: Actions = {
       const newStatus = !currentUser.disabled;
       await db.update(user).set({ disabled: newStatus }).where(eq(user.id, userId));
       
-      const action = newStatus ? 'disabled' : 'enabled';
-      return { success: true, message: `User ${action} successfully` };
+      // Fix: The action performed is the opposite of what the user was before
+      // If we're setting disabled to true, we "disabled" the user
+      // If we're setting disabled to false, we "enabled" the user
+      const actionPerformed = newStatus ? 'disabled' : 'enabled';
+      return { success: true, message: `User ${actionPerformed} successfully` };
     } catch (error) {
       console.error('Error toggling user status:', error);
       return fail(500, { message: 'Failed to toggle user status' });
