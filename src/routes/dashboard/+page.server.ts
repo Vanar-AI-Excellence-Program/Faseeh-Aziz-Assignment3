@@ -12,7 +12,8 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
     if (authSession?.user?.id) {
       // Always fetch fresh user data from database to get latest role
       const [userData] = await db.select().from(user).where(eq(user.id, authSession.user.id));
-      if (!userData || userData.disabled || userData.role !== 'admin') throw redirect(303, '/user');
+      if (!userData || userData.role !== 'admin') throw redirect(303, '/user');
+      if (userData.disabled) throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
 
       const rawStats = await getUserStats();
       return { 
@@ -43,7 +44,8 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
   if (!sessionData || sessionData.expires <= new Date()) throw redirect(303, '/login');
 
   const [userData] = await db.select().from(user).where(eq(user.id, sessionData.userId));
-  if (!userData || userData.disabled || userData.role !== 'admin') throw redirect(303, '/user');
+  if (!userData || userData.role !== 'admin') throw redirect(303, '/user');
+  if (userData.disabled) throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
 
   const rawStats = await getUserStats();
   return { 

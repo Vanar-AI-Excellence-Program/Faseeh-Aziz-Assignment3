@@ -1,4 +1,5 @@
 import type { LayoutServerLoad } from './$types';
+import { redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { user, session } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
@@ -19,6 +20,9 @@ export const load: LayoutServerLoad = async ({ locals, cookies }) => {
             role: userData.role 
           } 
         };
+      } else if (userData?.disabled) {
+        // User is disabled, redirect to login with error
+        throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
       }
     }
   } catch (error) {
@@ -41,6 +45,9 @@ export const load: LayoutServerLoad = async ({ locals, cookies }) => {
               role: userData.role 
             } 
           };
+        } else if (userData?.disabled) {
+          // User is disabled, redirect to login with error
+          throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
         }
       }
     } catch (error) {

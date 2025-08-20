@@ -11,8 +11,11 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
     if (authSession?.user?.id) {
       // Always fetch fresh user data from database to get latest role
       const [userData] = await db.select().from(user).where(eq(user.id, authSession.user.id));
-      if (!userData || userData.disabled || userData.role !== 'admin') {
+      if (!userData || userData.role !== 'admin') {
         throw redirect(303, '/user');
+      }
+      if (userData.disabled) {
+        throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
       }
 
       // Fetch all users
@@ -41,7 +44,10 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
   if (!sessionData || sessionData.expires <= new Date()) throw redirect(303, '/login');
 
   const [userData] = await db.select().from(user).where(eq(user.id, sessionData.userId));
-  if (!userData || userData.disabled || userData.role !== 'admin') throw redirect(303, '/user');
+  if (!userData || userData.role !== 'admin') throw redirect(303, '/user');
+  if (userData.disabled) {
+    throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
+  }
 
   // Fetch all users
   const allUsers = await db.select().from(user);
@@ -67,6 +73,9 @@ export const actions: Actions = {
       const authSession = await locals.auth();
       if (authSession?.user?.id) {
         const [userData] = await db.select().from(user).where(eq(user.id, authSession.user.id));
+        if (userData?.disabled) {
+          throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
+        }
         isAdmin = userData?.role === 'admin';
       }
     } catch (error) {
@@ -76,6 +85,9 @@ export const actions: Actions = {
         const [sessionData] = await db.select().from(session).where(eq(session.sessionToken, sessionToken));
         if (sessionData && sessionData.expires > new Date()) {
           const [userData] = await db.select().from(user).where(eq(user.id, sessionData.userId));
+          if (userData?.disabled) {
+            throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
+          }
           isAdmin = userData?.role === 'admin';
         }
       }
@@ -107,6 +119,8 @@ export const actions: Actions = {
   },
 
   toggleUserStatus: async ({ request, locals, cookies }) => {
+    console.log('[toggleUserStatus] Action started');
+    
     // Check if current user is admin
     let isAdmin = false;
     
@@ -114,28 +128,40 @@ export const actions: Actions = {
       const authSession = await locals.auth();
       if (authSession?.user?.id) {
         const [userData] = await db.select().from(user).where(eq(user.id, authSession.user.id));
+        if (userData?.disabled) {
+          throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
+        }
         isAdmin = userData?.role === 'admin';
+        console.log('[toggleUserStatus] Auth.js session check - isAdmin:', isAdmin);
       }
     } catch (error) {
+      console.log('[toggleUserStatus] Auth.js session failed, trying manual session');
       // Fallback to manual session
       const sessionToken = cookies.get('authjs.session-token');
       if (sessionToken) {
         const [sessionData] = await db.select().from(session).where(eq(session.sessionToken, sessionToken));
         if (sessionData && sessionData.expires > new Date()) {
           const [userData] = await db.select().from(user).where(eq(user.id, sessionData.userId));
+          if (userData?.disabled) {
+            throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
+          }
           isAdmin = userData?.role === 'admin';
+          console.log('[toggleUserStatus] Manual session check - isAdmin:', isAdmin);
         }
       }
     }
 
     if (!isAdmin) {
+      console.log('[toggleUserStatus] Admin access denied');
       return fail(403, { message: 'Admin access required' });
     }
 
     const formData = await request.formData();
     const userId = String(formData.get('userId'));
+    console.log('[toggleUserStatus] Processing request for userId:', userId);
 
     if (!userId) {
+      console.log('[toggleUserStatus] Missing user ID');
       return fail(400, { message: 'Missing user ID' });
     }
 
@@ -143,20 +169,31 @@ export const actions: Actions = {
       // Get current user status
       const [currentUser] = await db.select().from(user).where(eq(user.id, userId));
       if (!currentUser) {
+        console.log('[toggleUserStatus] User not found');
         return fail(404, { message: 'User not found' });
       }
+
+      console.log('[toggleUserStatus] Current user status - disabled:', currentUser.disabled);
 
       // Toggle disabled status
       const newStatus = !currentUser.disabled;
       await db.update(user).set({ disabled: newStatus }).where(eq(user.id, userId));
       
+      console.log('[toggleUserStatus] User status updated to disabled:', newStatus);
+      
       // Fix: The action performed is the opposite of what the user was before
       // If we're setting disabled to true, we "disabled" the user
       // If we're setting disabled to false, we "enabled" the user
       const actionPerformed = newStatus ? 'disabled' : 'enabled';
-      return { success: true, message: `User ${actionPerformed} successfully` };
+      console.log('[toggleUserStatus] Action performed:', actionPerformed);
+      
+      return { 
+        success: true, 
+        message: `User ${actionPerformed} successfully`,
+        data: { disabled: newStatus }
+      };
     } catch (error) {
-      console.error('Error toggling user status:', error);
+      console.error('[toggleUserStatus] Error toggling user status:', error);
       return fail(500, { message: 'Failed to toggle user status' });
     }
   }

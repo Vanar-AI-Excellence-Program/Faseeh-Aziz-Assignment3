@@ -6,6 +6,10 @@
 
 	let rightActive = false;
 	
+	// Password visibility states
+	let showLoginPassword = false;
+	let showSignupPassword = false;
+	
 	// Check URL parameters to determine which panel to show
 	$: if (browser) {
 		if ($page.url.searchParams.get('signup') === '1') {
@@ -53,6 +57,12 @@
 				rightActive = false;
 			}
 		});
+		
+		// Debug: Log URL parameters and data
+		console.log('Login page loaded with URL params:', window.location.search);
+		console.log('Error param:', $page.url.searchParams.get('error'));
+		console.log('Message param:', $page.url.searchParams.get('message'));
+		console.log('Data error:', data.error);
 	}
 </script>
 
@@ -90,7 +100,33 @@
 					<div class="w-full flex flex-col items-center">
 						<input class="auth-input" type="text" name="name" placeholder="Name" />
 						<input class="auth-input" type="email" name="email" placeholder="Email" required />
-						<input class="auth-input" type="password" name="password" placeholder="Password" required />
+						<div class="password-input-container">
+							<input 
+								class="auth-input" 
+								type={showSignupPassword ? "text" : "password"} 
+								name="password" 
+								placeholder="Password" 
+								required 
+							/>
+							<button 
+								type="button" 
+								class="password-toggle-btn cursor-pointer" 
+								on:click={() => showSignupPassword = !showSignupPassword}
+								aria-label={showSignupPassword ? "Hide password" : "Show password"}
+							>
+								{#if showSignupPassword}
+									<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+										<line x1="1" y1="1" x2="23" y2="23"/>
+									</svg>
+								{:else}
+									<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+										<circle cx="12" cy="12" r="3"/>
+									</svg>
+								{/if}
+							</button>
+						</div>
 						<button class="auth-btn" type="submit">Sign Up</button>
 					</div>
 				</form>
@@ -114,17 +150,103 @@
 					</form>
 				</div>
 				{#if $page.form?.action === 'signin' && $page.form?.error}
-					<div class="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{$page.form.message}</div>
+					<div class="mb-3 rounded-lg {($page.form.message || '').includes('disabled') ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-red-50 border-red-200 text-red-700'} border px-3 py-2 text-sm">
+						<div class="flex items-center gap-2">
+							{#if ($page.form.message || '').includes('disabled')}
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<circle cx="12" cy="12" r="10"/>
+									<line x1="15" y1="9" x2="9" y2="15"/>
+									<line x1="9" y1="9" x2="15" y2="15"/>
+								</svg>
+							{/if}
+							{$page.form.message}
+						</div>
+						{#if ($page.form.message || '').includes('disabled')}
+							<div class="mt-2 text-xs opacity-75">
+								If you believe this is an error, please contact support or try using a different account.
+							</div>
+						{/if}
+					</div>
 				{/if}
+				
+				<!-- OAuth Error Messages -->
+				{#if $page.url.searchParams.get('error') === 'disabled'}
+					<div class="mb-3 rounded-lg bg-orange-50 border border-orange-200 text-orange-700 px-3 py-2 text-sm">
+						<div class="flex items-center gap-2">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<circle cx="12" cy="12" r="10"/>
+								<line x1="15" y1="9" x2="9" y2="15"/>
+								<line x1="9" y1="9" x2="15" y2="15"/>
+							</svg>
+							{$page.url.searchParams.get('message') || 'Account is disabled. Please contact an administrator.'}
+						</div>
+						<div class="mt-2 text-xs opacity-75">
+							If you believe this is an error, please contact support or try using a different account.
+						</div>
+					</div>
+				{/if}
+				
+				<!-- Server-side error messages (including disabled user errors) -->
 				{#if data.error?.type === 'auth_error'}
-					<div class="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{data.error.message}</div>
+					<div class="mb-3 rounded-lg {data.error.message.includes('disabled') ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-red-50 border-red-200 text-red-700'} border px-3 py-2 text-sm">
+						<div class="flex items-center gap-2">
+							{#if data.error.message.includes('disabled')}
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<circle cx="12" cy="12" r="10"/>
+									<line x1="15" y1="9" x2="9" y2="15"/>
+									<line x1="9" y1="9" x2="15" y2="15"/>
+								</svg>
+							{/if}
+							{data.error.message}
+						</div>
+						{#if data.error.message.includes('disabled')}
+							<div class="mt-2 text-xs opacity-75">
+								If you believe this is an error, please contact support or try using a different account.
+							</div>
+						{/if}
+					</div>
 				{/if}
+				
+				<!-- Debug: Show data for troubleshooting -->
+				{#if data.error}
+					<div class="mb-3 rounded-lg bg-gray-50 border border-gray-200 text-gray-700 px-3 py-2 text-xs">
+						Debug: data.error.type={data.error.type}, data.error.message={data.error.message}
+					</div>
+				{/if}
+				
 				<form method="POST" action="?/signin" class="w-full contents" use:enhance>
 					<div class="w-full flex flex-col items-center">
 						<input type="hidden" name="provider" value="credentials" />
 						<input type="hidden" name="redirectTo" value="/dashboard" />
 						<input class="auth-input" id="loginEmail" type="email" name="email" placeholder="Email" required />
-						<input class="auth-input" id="loginPassword" type="password" name="password" placeholder="Password" required />
+						<div class="password-input-container">
+							<input 
+								class="auth-input" 
+								id="loginPassword"
+								type={showLoginPassword ? "text" : "password"} 
+								name="password" 
+								placeholder="Password" 
+								required 
+							/>
+							<button 
+								type="button" 
+								class="password-toggle-btn cursor-pointer" 
+								on:click={() => showLoginPassword = !showLoginPassword}
+								aria-label={showLoginPassword ? "Hide password" : "Show password"}
+							>
+								{#if showLoginPassword}
+									<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+										<line x1="1" y1="1" x2="23" y2="23"/>
+									</svg>
+								{:else}
+									<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+										<circle cx="12" cy="12" r="3"/>
+									</svg>
+								{/if}
+							</button>
+						</div>
 						<a href="/forgot-password">Forgot your password?</a>
 						<button class="auth-btn" type="submit">Sign In</button>
 					</div>
@@ -179,6 +301,42 @@
 .social{border:1px solid #DDD;border-radius:50%;display:inline-flex;justify-content:center;align-items:center;margin:0 8px;height:44px;width:44px;cursor:pointer;background:#fff;color:#444}
 .auth-form h1{font-weight:800;font-size:42px;line-height:1.1;margin-bottom:8px}
 .auth-form a{margin:8px 0 16px;color:#555}
+
+/* Password input container and toggle button */
+.password-input-container {
+	position: relative;
+	width: 320px;
+	max-width: 100%;
+}
+
+.password-input-container .auth-input {
+	width: 100%;
+	padding-right: 50px;
+}
+
+.password-toggle-btn {
+	position: absolute;
+	right: 15px;
+	top: 50%;
+	transform: translateY(-50%);
+	background: none;
+	border: none;
+	color: #666;
+	cursor: pointer;
+	padding: 5px;
+	border-radius: 4px;
+	transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.password-toggle-btn:hover {
+	color: #00ABE4;
+	background-color: rgba(0, 171, 228, 0.1);
+}
+
+.password-toggle-btn:focus {
+	outline: 2px solid #00ABE4;
+	outline-offset: 2px;
+}
 /* Right gradient panel typography */
 .overlay-panel h1{font-weight:800;font-size:44px;line-height:1.1;margin:0 0 14px;color:#fff}
 .overlay-panel p{color:#fff;opacity:.95;max-width:420px;margin:0 0 24px;line-height:1.6}

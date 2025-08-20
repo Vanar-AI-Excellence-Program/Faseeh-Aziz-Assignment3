@@ -26,13 +26,19 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
   // Handle Auth.js errors explicitly (e.g., OAuthAccountNotLinked)
   const error = url.searchParams.get('error');
+  console.log('[login] Server load - URL error param:', error);
+  console.log('[login] Server load - URL message param:', url.searchParams.get('message'));
+  
   if (error) {
     let message = 'An error occurred during sign in. Please try again.';
     if (error === 'OAuthAccountNotLinked') {
       message = 'Another account already exists with the same email. Please sign in using your original method (e.g., Credentials)';
     } else if (error === 'OAuthAccountExists') {
       message = 'This email is already associated with a different provider.';
+    } else if (error === 'disabled') {
+      message = url.searchParams.get('message') || 'Account is disabled. Please contact an administrator.';
     }
+    console.log('[login] Server load - Returning error:', { type: 'auth_error', message, provider: null });
     return { error: { type: 'auth_error', message, provider: null } };
   }
   
@@ -49,7 +55,9 @@ export const actions: Actions = {
 
     const [userRecord] = await db.select().from(user).where(eq(user.email, email));
     if (!userRecord || !userRecord.hashedPassword) return fail(400, { action: 'signin', error: true, message: 'Incorrect email or password.' });
-    if (userRecord.disabled) return fail(403, { action: 'signin', error: true, message: 'Account is disabled.' });
+    
+    // Check if user is disabled FIRST - before any other checks
+    if (userRecord.disabled) return fail(403, { action: 'signin', error: true, message: 'Account is disabled. Please contact an administrator.' });
     
     // Check if email is verified - if not, redirect to verification page
     if (!userRecord.emailVerified) {

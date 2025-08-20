@@ -11,6 +11,34 @@
   // Global theme for this layout (you can change to "dashboard" on child layouts)
   const theme = "marketing";
 
+  // Loading state to prevent old UI flash
+  let isLoading = false;
+  
+  // Set loading to true briefly when navigating to prevent old UI flash
+  $effect(() => {
+    if (browser) {
+      isLoading = true;
+      // Use requestAnimationFrame to ensure the loading state is shown
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          isLoading = false;
+        }, 50);
+      });
+    }
+  });
+
+  // Listen for page navigation to show loading state
+  $effect(() => {
+    if (browser && $page.url.pathname) {
+      isLoading = true;
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          isLoading = false;
+        }, 50);
+      });
+    }
+  });
+
   // Check if current page is a post-login page
   const isPostLoginPage = $derived(browser && ['/dashboard', '/user', '/chat', '/settings', '/admin/users'].includes($page.url.pathname));
 
@@ -41,7 +69,15 @@
   </style>
 </svelte:head>
 
-<div data-theme={theme} class={$page.url.pathname === '/' ? 'min-h-svh bg-\[#E9F1FA\] text-gray-900 overflow-x-hidden' : 'min-h-svh bg-gradient-to-b from-indigo-50 to-white text-gray-900 overflow-x-hidden'}>
+<div data-theme={theme} class="no-flash {isLoading ? '' : 'loaded'} {$page.url.pathname === '/' ? 'min-h-svh bg-\[#E9F1FA\] text-gray-900 overflow-x-hidden' : 'min-h-svh bg-gradient-to-b from-indigo-50 to-white text-gray-900 overflow-x-hidden'}">
+  {#if isLoading}
+    <div class="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
+      <div class="text-center">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p class="text-gray-600">Loading...</p>
+      </div>
+    </div>
+  {/if}
   {#if $page.url.pathname !== "/" && !isPostLoginPage}
     <!-- Header (hidden on home and post-login pages) -->
     <header class="sticky top-0 z-40 border-b bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
