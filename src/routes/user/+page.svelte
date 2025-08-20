@@ -183,18 +183,18 @@
     padding: 2rem;
     max-width: 1200px;
     margin: 0 auto;
-    background: #f8fafc;
+    background: linear-gradient(135deg, #E9F1FA 0%, #F8FBFF 70%);
     min-height: 100vh;
   }
 
   /* Header Section */
   .header-section {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #00ABE4 0%, #34c5f1 100%);
     border-radius: 20px;
     padding: 2.5rem;
     margin-bottom: 2rem;
     color: white;
-    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 10px 30px rgba(0, 171, 228, 0.3);
   }
 
   .user-profile {
@@ -276,6 +276,18 @@
     display: flex;
     align-items: center;
     gap: 1.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background: linear-gradient(135deg, #00ABE4, #34c5f1);
   }
 
   .stat-card:hover {
@@ -294,15 +306,15 @@
   }
 
   .stat-icon.chat-icon {
-    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    background: linear-gradient(135deg, #00ABE4, #1d4ed8);
   }
 
   .stat-icon.message-icon {
-    background: linear-gradient(135deg, #10b981, #059669);
+    background: linear-gradient(135deg, #34c5f1, #00ABE4);
   }
 
   .stat-icon.ai-icon {
-    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    background: linear-gradient(135deg, #00ABE4, #34c5f1);
   }
 
   .stat-content h3 {
@@ -327,6 +339,18 @@
     margin-bottom: 2rem;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
     border: 1px solid #e2e8f0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .quick-actions::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background: linear-gradient(135deg, #00ABE4, #34c5f1);
   }
 
   .section-title {
@@ -355,23 +379,23 @@
   }
 
   .action-btn.primary {
-    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    background: linear-gradient(135deg, #00ABE4, #1d4ed8);
     color: white;
   }
 
   .action-btn.primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+    box-shadow: 0 8px 25px rgba(0, 171, 228, 0.4);
   }
 
   .action-btn.secondary {
     background: white;
-    color: #3b82f6;
-    border-color: #3b82f6;
+    color: #00ABE4;
+    border-color: #00ABE4;
   }
 
   .action-btn.secondary:hover {
-    background: #3b82f6;
+    background: #00ABE4;
     color: white;
     transform: translateY(-2px);
   }
@@ -384,6 +408,18 @@
     margin-bottom: 2rem;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
     border: 1px solid #e2e8f0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .recent-activity::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background: linear-gradient(135deg, #00ABE4, #34c5f1);
   }
 
   .chat-list {
@@ -406,7 +442,7 @@
 
   .chat-item:hover {
     background: #f8fafc;
-    border-color: #3b82f6;
+    border-color: #00ABE4;
     transform: translateX(4px);
   }
 
@@ -431,7 +467,7 @@
   }
 
   .view-all-link {
-    color: #3b82f6;
+    color: #00ABE4;
     text-decoration: none;
     font-weight: 600;
     transition: color 0.3s ease;
@@ -449,6 +485,18 @@
     text-align: center;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
     border: 1px solid #e2e8f0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .empty-state::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background: linear-gradient(135deg, #00ABE4, #34c5f1);
   }
 
   .empty-icon {
@@ -476,7 +524,7 @@
     align-items: center;
     gap: 0.75rem;
     padding: 0.875rem 1.5rem;
-    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    background: linear-gradient(135deg, #00ABE4, #1d4ed8);
     color: white;
     text-decoration: none;
     border-radius: 12px;
@@ -486,7 +534,7 @@
 
   .empty-action:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+    box-shadow: 0 8px 25px rgba(0, 171, 228, 0.4);
   }
 
   /* Loading Spinner */
@@ -503,7 +551,7 @@
     width: 40px;
     height: 40px;
     border: 4px solid #e5e7eb;
-    border-top: 4px solid #3b82f6;
+    border-top: 4px solid #00ABE4;
     border-radius: 50%;
     animation: spin 1s linear infinite;
     margin-bottom: 1rem;
