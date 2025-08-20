@@ -95,24 +95,15 @@
     }
   }
   
-  $: if ($page.form?.action === 'toggleUserStatus' && $page.form?.success) {
-    message = $page.form.message || 'User status updated successfully';
-    messageType = 'success';
-    setTimeout(() => message = '', 3000);
-    
-    // Update local user data immediately to prevent UI flash
-    const formData = new FormData($page.form?.data);
-    const userId = formData.get('userId');
-    
-    if (userId) {
-      const userIndex = localUsers.findIndex(u => u.id === userId);
-      if (userIndex !== -1) {
-        localUsers[userIndex].disabled = !localUsers[userIndex].disabled;
-        // Trigger reactivity by reassigning the array
-        localUsers = [...localUsers];
-      }
-    }
-  }
+     $: if ($page.form?.action === 'toggleUserStatus' && $page.form?.success) {
+     console.log('[frontend] toggleUserStatus success:', $page.form);
+     message = $page.form.message || 'User status updated successfully';
+     messageType = 'success';
+     setTimeout(() => message = '', 3000);
+     
+     // Note: Local state is now updated directly in the form submission handler
+     // This prevents duplicate updates and ensures immediate UI feedback
+   }
   
   $: if ($page.form?.error) {
     message = $page.form.message || 'An error occurred';
@@ -147,6 +138,35 @@
     confirmAction = '';
     confirmUserId = '';
     confirmUserEmail = '';
+  }
+
+  // Function to update local user status immediately
+  function updateLocalUserStatus(userId: string, newStatus?: boolean) {
+    console.log('[frontend] updateLocalUserStatus called for userId:', userId, 'newStatus:', newStatus);
+    const userIndex = localUsers.findIndex(u => u.id === userId);
+    if (userIndex !== -1) {
+      if (newStatus !== undefined) {
+        // Use the exact status from the server response
+        localUsers[userIndex].disabled = newStatus;
+        console.log('[frontend] Updated local user disabled status to:', newStatus);
+      } else {
+        // Fallback: toggle the current status
+        localUsers[userIndex].disabled = !localUsers[userIndex].disabled;
+        console.log('[frontend] Fallback: toggled local user disabled status to:', localUsers[userIndex].disabled);
+      }
+      // Trigger reactivity by reassigning the array
+      localUsers = [...localUsers];
+    }
+  }
+
+  // Function to refresh the page data (keeping for backup)
+  function refreshPageData() {
+    console.log('[frontend] refreshPageData called');
+    // Simple approach: reload the page after a short delay
+    setTimeout(() => {
+      console.log('[frontend] Reloading page to reflect changes');
+      window.location.reload();
+    }, 500); // Reduced delay for better UX
   }
 </script>
 
@@ -320,9 +340,9 @@
                                          <!-- Change Role -->
                      <form method="POST" action="?/changeRole" use:enhance class="inline">
                        <input type="hidden" name="userId" value={user.id} />
-                       <select
-                         name="role"
-                         class="text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors hover:border-blue-400"
+                                               <select
+                          name="role"
+                          class="text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors hover:border-blue-400 cursor-pointer"
                          onchange={(e) => {
                            const form = e.target.form;
                            if (form) {
@@ -350,19 +370,14 @@
                      <button
                        type="button"
                        onclick={() => {
-                         // Update local state immediately for instant UI feedback
-                         const userIndex = localUsers.findIndex(u => u.id === user.id);
-                         if (userIndex !== -1) {
-                           localUsers[userIndex].disabled = !localUsers[userIndex].disabled;
-                           localUsers = [...localUsers];
-                         }
-                         // Use the updated local state to determine the action
-                         const updatedUser = localUsers[userIndex];
-                         showConfirm(updatedUser.disabled ? 'enable' : 'disable', user.id, user.email);
+                         // Don't update local state yet - wait for confirmation
+                         // Just show the confirmation dialog with the action that would be performed
+                         const action = user.disabled ? 'enable' : 'disable';
+                         showConfirm(action, user.id, user.email);
                        }}
-                       class="text-xs px-3 py-1 rounded-md transition-colors {user.disabled 
-                         ? 'bg-green-100 text-green-800 hover:bg-green-200' 
-                         : 'bg-red-200 text-red-800 hover:bg-red-300'}"
+                                               class="text-xs px-3 py-1 rounded-md transition-colors cursor-pointer {user.disabled 
+                          ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                          : 'bg-red-200 text-red-800 hover:bg-red-300'}"
                      >
                        {user.disabled ? 'Enable' : 'Disable'}
                      </button>
@@ -422,24 +437,64 @@
             <div class="flex justify-center space-x-3">
               <button
                 onclick={hideConfirm}
-                class="px-4 py-2 bg-gray-300 text-gray-700 text-base font-medium rounded-md shadow-sm hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                                 class="px-4 py-2 bg-gray-300 text-gray-700 text-base font-medium rounded-md shadow-sm hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 cursor-pointer"
               >
                 Cancel
               </button>
-                             <form method="POST" action="?/toggleUserStatus" use:enhance class="inline">
-                 <input type="hidden" name="userId" value={confirmUserId} />
-                 <button
-                   type="submit"
-                   onclick={() => {
-                     // The local state is already updated when the button was clicked
-                     // This ensures the UI stays consistent during form submission
-                     hideConfirm();
-                   }}
-                   class="px-4 py-2 {confirmAction === 'disable' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white text-base font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 {confirmAction === 'disable' ? 'focus:ring-red-500' : 'focus:ring-green-500'}"
-                 >
-                   {confirmAction === 'disable' ? 'Disable' : 'Enable'}
-                 </button>
-               </form>
+                                                                                                                                                 <form method="POST" action="?/toggleUserStatus" use:enhance={() => {
+                               console.log('[frontend] Form submission started for toggleUserStatus');
+                               // Store the user ID before hiding the dialog
+                               const userIdToUpdate = confirmUserId;
+                               return async ({ result }) => {
+                                 console.log('[frontend] Form submission result:', result);
+                                 // Hide the confirmation dialog after form submission
+                                 hideConfirm();
+                                 
+                                 // If there's an error, show it
+                                 if (result.type === 'failure') {
+                                   console.error('Form submission failed:', result);
+                                 } else if (result.type === 'success') {
+                                   // Update local state immediately to reflect changes without page reload
+                                   console.log('[frontend] Updating local state after success');
+                                   console.log('[frontend] Full result object:', result);
+                                   console.log('[frontend] Result data:', result.data);
+                                   console.log('[frontend] Result data type:', typeof result.data);
+                                   
+                                   // Try different ways to access the data
+                                   let newStatus = result.data?.data?.disabled; // Access nested data structure
+                                   console.log('[frontend] Direct access to nested data:', result.data?.data);
+                                   
+                                   if (newStatus === undefined && result.data) {
+                                     // Try to parse if it's a string
+                                     try {
+                                       const parsedData = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
+                                       newStatus = parsedData.data?.disabled; // Access nested data in parsed result
+                                       console.log('[frontend] Parsed data:', parsedData);
+                                     } catch (e) {
+                                       console.log('[frontend] Failed to parse data:', e);
+                                     }
+                                   }
+                                   
+                                   console.log('[frontend] Final new status:', newStatus);
+                                   if (newStatus !== undefined) {
+                                     // Use the stored user ID instead of confirmUserId
+                                     updateLocalUserStatus(userIdToUpdate, newStatus);
+                                   } else {
+                                     // Fallback: toggle the current status
+                                     console.log('[frontend] Using fallback toggle');
+                                     updateLocalUserStatus(userIdToUpdate);
+                                   }
+                                 }
+                               };
+                             }} class="inline">
+                                <input type="hidden" name="userId" value={confirmUserId} />
+                                                                 <button
+                                    type="submit"
+                                    class="px-4 py-2 {confirmAction === 'disable' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white text-base font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 {confirmAction === 'disable' ? 'focus:ring-red-500' : 'focus:ring-green-500'} cursor-pointer"
+                                  >
+                                    {confirmAction === 'disable' ? 'Disable' : 'Enable'}
+                                  </button>
+                              </form>
             </div>
           </div>
         </div>

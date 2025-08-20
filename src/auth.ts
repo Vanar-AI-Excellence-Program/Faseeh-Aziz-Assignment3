@@ -98,29 +98,43 @@ export const authOptions = {
   ],
   callbacks: {
     async signIn(params: { user: User; account?: Account | null; profile?: Profile; email?: { verificationRequest?: boolean }; credentials?: Record<string, unknown> }) {
-      const { account: authAccount, profile } = params;
-      if (!authAccount || authAccount.provider === 'credentials') return true;
+      try {
+        const { account: authAccount, profile } = params;
+        if (!authAccount || authAccount.provider === 'credentials') return true;
 
-      const email = (profile as any)?.email as string | undefined;
-      if (!email) return true;
+        const email = (profile as any)?.email as string | undefined;
+        if (!email) return true;
 
-      // Find existing user with the same email
-      const [existingUser] = await db.select().from(user).where(eq(user.email, email.toLowerCase()));
-      if (!existingUser) return true; // No existing user, allow normal account creation
+        // Find existing user with the same email
+        const [existingUser] = await db.select().from(user).where(eq(user.email, email.toLowerCase()));
+        if (!existingUser) return true; // No existing user, allow normal account creation
 
-      // Check if this specific provider is already linked
-      const linkedAccounts = await db.select().from(account).where(eq(account.userId, existingUser.id));
-      const linkedProviders = linkedAccounts.map((a) => a.provider);
+        // Check if user is disabled - if yes, let them complete OAuth but we'll catch them in post-auth
+        if (existingUser.disabled) {
+          console.log(`User is disabled but allowing OAuth completion: ${existingUser.email}`);
+          console.log(`User details:`, { id: existingUser.id, email: existingUser.email, disabled: existingUser.disabled });
+          
+          // Return true to let OAuth complete, we'll redirect them in post-auth
+          return true;
+        }
 
-      if (!linkedProviders.includes(authAccount.provider)) {
-        // Provider not linked yet, but user exists with same email
-        // Allow the sign-in to proceed - Auth.js will automatically link the account
-        console.log(`Linking ${authAccount.provider} account to existing user: ${existingUser.email}`);
+        // Check if this specific provider is already linked
+        const linkedAccounts = await db.select().from(account).where(eq(account.userId, existingUser.id));
+        const linkedProviders = linkedAccounts.map((a) => a.provider);
+
+        if (!linkedProviders.includes(authAccount.provider)) {
+          // Provider not linked yet, but user exists with same email
+          // Allow the sign-in to proceed - Auth.js will automatically link the account
+          console.log(`Linking ${authAccount.provider} account to existing user: ${existingUser.email}`);
+          return true;
+        }
+
+        // Provider already linked, proceed normally
         return true;
+      } catch (error) {
+        console.error('Error in signIn callback:', error);
+        return false; // Block sign-in on any error
       }
-
-      // Provider already linked, proceed normally
-      return true;
     },
 
     async session({ session, user }: { session: any; user: any }) {
@@ -142,8 +156,7 @@ export const authOptions = {
   },
   pages: { 
     signIn: '/login',
-    signOut: '/login',
-    error: '/login'
+    signOut: '/login'
   },
   events: {
     async signIn(params: { user: User; account?: Account | null; profile?: Profile }) {

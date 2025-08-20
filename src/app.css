@@ -123,3 +123,13 @@
 .border-\[#00ABE4\] {
   border-color: #00ABE4;
 }
+
+/* Prevent flash during loading */
+.no-flash {
+  opacity: 0;
+  transition: opacity 0.1s ease-in-out;
+}
+
+.no-flash.loaded {
+  opacity: 1;
+}

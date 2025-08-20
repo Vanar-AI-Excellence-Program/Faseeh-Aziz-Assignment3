@@ -4,7 +4,7 @@ import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 
-export const GET: RequestHandler = async ({ locals }) => {
+export const GET: RequestHandler = async ({ locals, cookies }) => {
   const session = await locals.auth();
   
   if (!session?.user) {
@@ -13,10 +13,25 @@ export const GET: RequestHandler = async ({ locals }) => {
 
   // Ensure role is present; if missing, fetch from DB (database session strategy may omit role)
   let role: string | undefined = (session.user as any).role;
-  if (!role && session.user.id) {
+  let userRecord: any = null;
+  
+  if (session.user.id) {
     try {
       const [u] = await db.select().from(user).where(eq(user.id, session.user.id));
-      role = u?.role ?? undefined;
+      userRecord = u;
+      role = u?.role ?? role;
+      
+      // Check if user is disabled
+      if (u?.disabled) {
+        console.log(`Blocking disabled user from accessing protected pages: ${u.email}`);
+        console.log(`Redirecting to: /login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
+        
+        // Clear the Auth.js session cookie to properly log out the user
+        cookies.delete('authjs.session-token', { path: '/' });
+        
+        // Redirect back to login with error message
+        throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
+      }
     } catch {}
   }
 

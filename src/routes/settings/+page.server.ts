@@ -11,7 +11,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 
   // Always fetch fresh user data from database to get latest role
   const [userData] = await db.select().from(user).where(eq(user.id, session.user.id));
-  if (!userData || userData.disabled) throw redirect(303, '/login');
+  if (!userData) throw redirect(303, '/login');
+  if (userData.disabled) throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
 
   return { 
     user: { 
