@@ -16,6 +16,7 @@
   let input = '';
   let loading = false;
   let error: string | null = null;
+  let abortController: AbortController | null = null;
 
   let replyToMessageId: string | null = null;
   let renamingChatId: string | null = null;
@@ -346,6 +347,9 @@
 
     loading = true;
     scrollToBottom();
+    
+    // Create new AbortController for this request
+    abortController = new AbortController();
 
     try {
       // Build branch context for forked messages
@@ -421,7 +425,8 @@
              const res = await fetch('/api/chat', {
          method: 'POST',
          body: JSON.stringify({ messages: validBranchMessages }),
-         headers: { 'content-type': 'application/json' }
+         headers: { 'content-type': 'application/json' },
+         signal: abortController.signal
        });
 
       if (!res.ok) {
@@ -504,9 +509,16 @@
 
       
     } catch (e: any) {
-      error = e?.message ?? 'Unknown error';
+      if (e.name === 'AbortError') {
+        // Request was aborted by user
+        console.log('Request was aborted by user');
+        error = null;
+      } else {
+        error = e?.message ?? 'Unknown error';
+      }
     } finally {
       loading = false;
+      abortController = null;
     }
   }
 
@@ -516,6 +528,15 @@
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
       }
     }, 10);
+  }
+
+  function stopResponse() {
+    if (abortController) {
+      abortController.abort();
+      abortController = null;
+    }
+    loading = false;
+    error = null;
   }
 
   // After initial mount or refresh, jump to bottom if there are messages
@@ -587,11 +608,12 @@
           </svg>
           New Chat
         </button>
-        <button
-          onclick={refreshChats}
-          class="bg-gray-500 text-white rounded-lg px-3 py-2 text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-gray-600 transition-colors"
-          title="Refresh chats"
-        >
+                 <button
+           onclick={refreshChats}
+           class="bg-gray-500 text-white rounded-lg px-3 py-2 text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-gray-600 transition-colors"
+           title="Refresh chats"
+           aria-label="Refresh chats"
+         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
           </svg>
@@ -784,6 +806,18 @@
                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
              </svg>
            </button>
+           {#if loading}
+             <button
+               onclick={stopResponse}
+               class="p-3 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors cursor-pointer"
+               aria-label="Stop response"
+               title="Stop response"
+             >
+               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+               </svg>
+             </button>
+           {/if}
          </div>
       </div>
       
@@ -824,142 +858,12 @@
     background-color: rgb(67 56 202);
   }
 
+  /* Basic prose styling for markdown elements */
   .prose {
     color: rgb(17 24 39);
   }
 
-  .prose p {
-    margin-bottom: 0.5rem;
-  }
-
-  .prose p:last-child {
-    margin-bottom: 0;
-  }
-
-  .prose code {
-    background-color: rgb(31 41 55);
-    color: rgb(229 231 235);
-    padding: 0.125rem 0.25rem;
-    border-radius: 0.25rem;
-    font-size: 0.875rem;
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
-    border: 1px solid rgb(75 85 99);
-  }
-
-  .prose pre {
-    background-color: rgb(17 24 39);
-    color: rgb(229 231 235);
-    padding: 0.75rem;
-    border-radius: 0.5rem;
-    overflow-x: auto;
-    border: 1px solid rgb(75 85 99);
-    margin: 0;
-  }
-
-  .prose pre code {
-    background-color: transparent;
-    padding: 0;
-    color: rgb(229 231 235);
-    border: none;
-  }
-
-  .prose strong {
-    font-weight: 600;
-  }
-
-  .prose em {
-    font-style: italic;
-  }
-
-  .prose del {
-    text-decoration: line-through;
-  }
-
-  .prose h1, .prose h2, .prose h3 {
-    margin-top: 1.5rem;
-    margin-bottom: 0.75rem;
-    line-height: 1.25;
-  }
-
-  .prose h1 {
-    font-size: 1.5rem;
-    font-weight: 700;
-  }
-
-  .prose h2 {
-    font-size: 1.25rem;
-    font-weight: 600;
-  }
-
-  .prose h3 {
-    font-size: 1.125rem;
-    font-weight: 600;
-  }
-
-  .prose ul, .prose ol {
-    margin: 0.75rem 0;
-    padding-left: 1.5rem;
-  }
-
-  .prose li {
-    margin: 0.25rem 0;
-  }
-
-  .prose blockquote {
-    border-left: 4px solid rgb(59 130 246);
-    padding-left: 1rem;
-    margin: 1rem 0;
-    font-style: italic;
-    color: rgb(55 65 81);
-    background-color: rgb(239 246 255);
-    padding: 1rem;
-    border-radius: 0.5rem;
-  }
-
-  .prose hr {
-    border: none;
-    border-top: 2px solid rgb(59 130 246);
-    margin: 1.5rem 0;
-    opacity: 0.7;
-  }
-
-  .prose table {
-    border-collapse: collapse;
-    width: 100%;
-    margin: 1rem 0;
-    background-color: rgb(249 250 251);
-    border-radius: 0.5rem;
-    overflow: hidden;
-  }
-
-  .prose th, .prose td {
-    border: 1px solid rgb(209 213 219);
-    padding: 0.5rem 0.75rem;
-    text-align: left;
-  }
-
-  .prose th {
-    background-color: rgb(243 244 246);
-    font-weight: 600;
-    color: rgb(17 24 39);
-  }
-
-  .prose td {
-    background-color: rgb(255 255 255);
-    color: rgb(17 24 39);
-  }
-
-  .prose a {
-    color: #2563eb;
-    text-decoration: underline;
-  }
-
-  .prose a:hover {
-    color: #1d4ed8;
-  }
-
   /* Force all code blocks to have dark backgrounds - using direct selectors */
-  .prose pre,
   .prose div[class*="bg-gray-900"],
   .prose div[class*="bg-gray-800"] {
     background-color: rgb(17 24 39) !important;
@@ -971,7 +875,6 @@
     margin: 1rem 0 !important;
   }
 
-  .prose pre code,
   .prose div[class*="bg-gray-900"] code,
   .prose div[class*="bg-gray-800"] code {
     background-color: transparent !important;
@@ -987,16 +890,7 @@
     border: 1px solid rgb(75 85 99) !important;
   }
 
-  /* Target any div that contains code blocks */
-  .prose div:has(> pre),
-  .prose div:has(> code) {
-    background-color: rgb(17 24 39) !important;
-    color: rgb(229 231 235) !important;
-  }
-
   /* Additional direct targeting for code blocks */
-  .prose .bg-gray-900,
-  .prose .bg-gray-800,
   .prose [class*="language-"] {
     background-color: rgb(17 24 39) !important;
     color: rgb(229 231 235) !important;
