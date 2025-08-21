@@ -7,6 +7,11 @@ import { env } from '$env/dynamic/private';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   try {
+    // Check if request has been aborted
+    if (request.signal?.aborted) {
+      return json({ error: 'Request was aborted' }, { status: 499 });
+    }
+
     const session = await locals.auth();
     if (!session?.user?.id) {
       return json({ error: 'Unauthorized' }, { status: 401 });
@@ -88,19 +93,52 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         // Simulate streaming by sending the response in chunks
         const words = aiResponse.split(' ');
         let index = 0;
+        let isAborted = false;
         
         const sendChunk = () => {
-          if (index < words.length) {
+          // Check if the stream has been aborted
+          if (isAborted || index >= words.length) {
+            try {
+              controller.close();
+            } catch (e) {
+              // Ignore errors when closing an already closed controller
+            }
+            return;
+          }
+          
+          try {
             const chunk = words[index] + ' ';
             controller.enqueue(new TextEncoder().encode(`0:${JSON.stringify(chunk)}\n`));
             index++;
-            setTimeout(sendChunk, 100); // Simulate typing delay
-          } else {
-            controller.close();
+            
+            // Check if we should continue or if request was aborted
+            if (index < words.length) {
+              setTimeout(sendChunk, 100); // Simulate typing delay
+            } else {
+              try {
+                controller.close();
+              } catch (e) {
+                // Ignore errors when closing an already closed controller
+              }
+            }
+          } catch (error) {
+            // If enqueue fails (stream closed), stop sending chunks
+            console.log('Stream closed, stopping chunks');
+            isAborted = true;
+            try {
+              controller.close();
+            } catch (e) {
+              // Ignore errors when closing an already closed controller
+            }
           }
         };
         
         sendChunk();
+        
+        // Handle stream cancellation
+        return () => {
+          isAborted = true;
+        };
       }
     });
 
