@@ -16,10 +16,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 
   const userId = userData.id;
   const chatsData = await db.select().from(chat).where(eq(chat.userId, userId)).orderBy(chat.updatedAt as any);
-  const firstChatId = chatsData[0]?.id ?? null;
-  const messagesData = firstChatId
-    ? await db.select().from(message).where(and(eq(message.chatId, firstChatId)) as any)
-    : [];
+  
+  // Fetch messages for all chats
+  const chatsWithMessages = await Promise.all(
+    chatsData.map(async (chatData) => {
+      const messagesData = await db.select().from(message).where(eq(message.chatId, chatData.id));
+      return {
+        ...chatData,
+        messages: messagesData
+      };
+    })
+  );
 
   return { 
     user: { 
@@ -28,8 +35,8 @@ export const load: PageServerLoad = async ({ locals }) => {
       email: userData.email, 
       role: userData.role 
     },
-    chats: chatsData,
-    messages: messagesData
+    chats: chatsWithMessages,
+    messages: [] // We don't need this anymore since messages are included with chats
   } as any;
 };
 
