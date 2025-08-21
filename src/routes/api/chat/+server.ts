@@ -129,6 +129,24 @@ async function callGoogleGenerativeAI(messages: any[], file: File | null): Promi
     parts: [{ text: msg.content }]
   }));
 
+  // Add system prompt to ensure markdown formatting
+  const systemPrompt = {
+    role: 'user',
+    parts: [{ text: `You are a helpful AI programming assistant. Always respond using proper markdown formatting including:
+
+- Use **bold** for emphasis and important terms
+- Use *italic* for code concepts and file names
+- Use \`inline code\` for code snippets, variables, and commands
+- Use \`\`\`language\ncode blocks\n\`\`\` for longer code examples
+- Use # ## ### for headers to organize your responses
+- Use - or * for bullet points in lists
+- Use > for blockquotes when referencing or explaining concepts
+- Use [link text](url) for any relevant links
+- Structure your responses with clear sections using headers
+
+Make your responses well-formatted and easy to read.` }]
+  };
+
   // Add file context if available
   if (file) {
     contents.unshift({
@@ -136,6 +154,9 @@ async function callGoogleGenerativeAI(messages: any[], file: File | null): Promi
       parts: [{ text: `I have uploaded a file: ${file.name}. Please consider this context when responding.` }]
     });
   }
+
+  // Add system prompt at the beginning
+  contents.unshift(systemPrompt);
 
   const body = {
     contents: contents,
@@ -191,9 +212,13 @@ function generateBasicResponse(messages: any[]): string {
   
   // Handle specific programming questions
   if (userQuery.includes('swap') && userQuery.includes('cpp')) {
-    return `Here's the C++ code for swapping two variables:
+    return `# C++ Variable Swapping Methods
 
-**Method 1: Using a temporary variable**
+Here are **three different approaches** to swap two variables in C++:
+
+## Method 1: Using a Temporary Variable
+This is the **most common and readable** approach:
+
 \`\`\`cpp
 #include <iostream>
 using namespace std;
@@ -215,7 +240,9 @@ int main() {
 }
 \`\`\`
 
-**Method 2: Using XOR (bitwise)**
+## Method 2: Using XOR (Bitwise)
+This method is **memory-efficient** but only works with integers:
+
 \`\`\`cpp
 #include <iostream>
 using namespace std;
@@ -237,7 +264,9 @@ int main() {
 }
 \`\`\`
 
-**Method 3: Using std::swap (C++ Standard Library)**
+## Method 3: Using std::swap (C++ Standard Library)
+This is the **most modern and recommended** approach in C++11 and later:
+
 \`\`\`cpp
 #include <iostream>
 #include <algorithm>
@@ -254,19 +283,85 @@ int main() {
 }
 \`\`\`
 
-The first method using a temporary variable is the most common and readable approach. The XOR method is memory-efficient but only works with integers. The std::swap method is the most modern and recommended approach in C++11 and later.`;
+## Summary
+- **Method 1** (temporary variable): Most readable and widely used
+- **Method 2** (XOR): Memory-efficient but integer-only
+- **Method 3** (std::swap): Modern, standard library approach
+
+> **Tip**: For production code, prefer **Method 1** for clarity or **Method 3** for modern C++ standards.`;
   } else if (userQuery === 'hi' || userQuery === 'hello' || userQuery.includes('hi') || userQuery.includes('hello')) {
-    return 'Hello! I\'m your AI programming assistant. I can help you with coding questions, explain concepts, and provide code examples. What would you like to know?';
+    return `# Hello! 👋
+
+I'm your **AI programming assistant** and I'm here to help you with:
+
+## What I Can Help With
+- **Code examples** in various programming languages
+- **Algorithm explanations** and implementations
+- **Debugging help** and problem-solving
+- **Best practices** and coding standards
+- **Code reviews** and optimization tips
+- **Framework and library** guidance
+
+## Getting Started
+Just ask me any programming question! For example:
+- "How do I implement a binary search tree?"
+- "What's the difference between \`let\` and \`const\` in JavaScript?"
+- "Can you help me debug this Python code?"
+
+What would you like to know today?`;
   } else if (userQuery.includes('help')) {
-    return 'I\'m here to help you with programming questions! You can ask me about:\n\n• Code examples in various languages\n• Algorithm explanations\n• Debugging help\n• Best practices\n• And much more!\n\nJust ask your question and I\'ll do my best to help.';
+    return `# How Can I Help You? 🤔
+
+I'm your **dedicated programming assistant** and I'm here to make your coding journey easier!
+
+## My Capabilities
+- **Code Generation**: Write code in multiple languages
+- **Debugging**: Help identify and fix issues
+- **Explanations**: Break down complex concepts
+- **Best Practices**: Share industry standards
+- **Code Review**: Suggest improvements
+- **Problem Solving**: Algorithm design and optimization
+
+## Programming Languages I Know
+- **Web**: HTML, CSS, JavaScript, TypeScript
+- **Backend**: Python, Node.js, Java, C#, Go
+- **Mobile**: React Native, Flutter, Swift, Kotlin
+- **Data**: SQL, Python (pandas, numpy), R
+- **And many more!**
+
+## Getting the Best Responses
+- Be **specific** about your question
+- Include **code snippets** when relevant
+- Mention the **programming language** you're using
+- Describe what you've **already tried**
+
+> **Ready to code?** Just ask your question and I'll provide a detailed, well-formatted response!`;
   } else {
-         return `I understand you're asking about: "${userMessage.content}"
+    return `# I Understand Your Question
 
-I'm currently using basic responses since no AI API is configured. To get intelligent responses, please add this environment variable:
+You're asking about: **"${userMessage.content}"**
 
-• GOOGLE_GENERATIVE_AI_API_KEY=your_google_api_key
+## Current Status
+I'm currently using **basic responses** since no AI API is configured. To get **intelligent, contextual responses**, please add this environment variable:
 
-What specific programming help do you need? I can assist with basic questions and provide code examples.`;
+\`\`\`bash
+GOOGLE_GENERATIVE_AI_API_KEY=your_google_api_key
+\`\`\`
+
+## What I Can Still Help With
+Even without the AI API, I can assist with:
+- **Basic programming concepts**
+- **Code examples** and templates
+- **Algorithm explanations**
+- **Language-specific syntax**
+- **Common programming patterns**
+
+## Next Steps
+1. **Get a Google AI API key** from [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. **Add it to your environment** variables
+3. **Restart your application**
+
+> **In the meantime**: What specific programming help do you need? I'll do my best to assist you!`;
   }
 }
 
