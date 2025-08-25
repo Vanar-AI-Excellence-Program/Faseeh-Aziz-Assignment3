@@ -77,3 +77,59 @@
 .hero-blob-b {
   @apply absolute -bottom-28 -right-24 h-80 w-80 rounded-full bg-gradient-to-tr from-fuchsia-500/25 to-sky-500/25 blur-3xl;
 }
+
+/* Chat-specific button styles - simplified for Tailwind v4 compatibility */
+.chat-btn {
+  @apply inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-50 disabled:pointer-events-none;
+}
+
+.chat-btn-primary {
+  @apply bg-indigo-600 text-white hover:bg-indigo-700 h-10 py-2 px-4;
+}
+
+/* Additional button styles for login page compatibility */
+.btn-sm {
+  @apply px-3 py-1.5 text-sm;
+}
+
+.rounded-full {
+  @apply rounded-full;
+}
+
+/* Text color utilities */
+.text-\[#00ABE4\] {
+  color: #00ABE4;
+}
+
+.text-\[#E9F1FA\] {
+  color: #E9F1FA;
+}
+
+/* Background color utilities */
+.bg-\[#E9F1FA\] {
+  background-color: #E9F1FA;
+}
+
+.bg-\[#00ABE4\] {
+  background-color: #00ABE4;
+}
+
+/* Ring color utilities */
+.ring-\[#00ABE4\] {
+  --tw-ring-color: #00ABE4;
+}
+
+/* Border color utilities */
+.border-\[#00ABE4\] {
+  border-color: #00ABE4;
+}
+
+/* Prevent flash during loading */
+.no-flash {
+  opacity: 0;
+  transition: opacity 0.1s ease-in-out;
+}
+
+.no-flash.loaded {
+  opacity: 1;
+}

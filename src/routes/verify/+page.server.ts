@@ -120,9 +120,8 @@ export const actions = {
 
     const dest = u.role === 'admin' ? '/dashboard' : '/user';
     console.log('[verify] Redirecting to:', dest);
-    console.log('[verify] About to throw redirect to:', `/verify/success?dest=${encodeURIComponent(dest)}`);
-    console.log('[verify] This should not be caught as an error');
-    throw redirect(303, `/verify/success?dest=${encodeURIComponent(dest)}`);
+    console.log('[verify] Redirecting directly to destination');
+    throw redirect(303, dest);
   },
 
   resend: async ({ request }: { request: Request }) => {

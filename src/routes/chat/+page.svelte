@@ -16,12 +16,13 @@
   let input = '';
   let loading = false;
   let error: string | null = null;
-  let fileInput: HTMLInputElement;
-  let uploadedFile: File | null = null;
-  let sidebarOpen = true;
+  let abortController: AbortController | null = null;
+
   let replyToMessageId: string | null = null;
   let renamingChatId: string | null = null;
   let renameInput = '';
+  let fileInput: HTMLInputElement;
+  let uploadedFile: File | null = null;
   $: replyToMessage = activeChat?.messages.find((m) => m.id === replyToMessageId) || null;
 
   // Minimal action to inject trusted HTML (generated locally)
@@ -46,18 +47,79 @@
 
   function renderMarkdownLite(src: string): string {
     let text = src || '';
-    // Code fences ```lang\ncode\n```
+    
+    // Headers (# ## ###)
+    text = text.replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mt-4 mb-2">$1</h3>');
+    text = text.replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold mt-4 mb-2">$1</h2>');
+    text = text.replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-4 mb-2">$1</h1>');
+    
+    // Code fences ```lang\ncode\n``` with syntax highlighting
     text = text.replace(/```([a-zA-Z0-9+-]*)\n([\s\S]*?)```/g, (_m, lang, code) => {
       const cls = lang ? ` class="language-${lang}"` : '';
-      return `<pre><code${cls}>${escapeHtml(code.trim())}</code></pre>`;
+      const langLabel = lang ? `<div class="text-xs text-gray-300 mb-2 font-mono bg-gray-700 px-2 py-1 rounded">${lang}</div>` : '';
+      return `<div class="bg-gray-900 text-gray-100 rounded-lg p-4 my-4 overflow-x-auto border border-gray-600 shadow-lg" style="background-color: rgb(17 24 39) !important; color: rgb(229 231 235) !important;"><pre class="bg-gray-900 text-gray-100" style="background-color: rgb(17 24 39) !important; color: rgb(229 231 235) !important;"><code${cls}>${langLabel}${escapeHtml(code.trim())}</code></pre></div>`;
     });
+    
     // Inline code `code`
-    text = text.replace(/`([^`]+)`/g, (_m, code) => `<code>${escapeHtml(code)}</code>`);
-    // Bold **text**
-    text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/`([^`]+)`/g, (_m, code) => `<code class="bg-gray-800 text-gray-100 px-2 py-1 rounded text-sm font-mono border border-gray-600" style="background-color: rgb(31 41 55) !important; color: rgb(229 231 235) !important;">${escapeHtml(code)}</code>`);
+    
+    // Bold **text** and __text__
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold">$1</strong>');
+    text = text.replace(/__(.*?)__/g, '<strong class="font-bold">$1</strong>');
+    
+    // Italic *text* and _text_
+    text = text.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
+    text = text.replace(/_(.*?)_/g, '<em class="italic">$1</em>');
+    
+    // Strikethrough ~~text~~
+    text = text.replace(/~~(.*?)~~/g, '<del class="line-through">$1</del>');
+    
+    // Links [text](url)
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-blue-600 hover:text-blue-800 underline" target="_blank" rel="noopener noreferrer">$1</a>');
+    
+    // Unordered lists (- * +)
+    text = text.replace(/^[\s]*[-*+][\s]+(.*)/gim, '<li class="ml-4">$1</li>');
+    text = text.replace(/(<li.*<\/li>)/s, '<ul class="list-disc ml-6 my-2">$1</ul>');
+    
+    // Ordered lists (1. 2. 3.)
+    text = text.replace(/^[\s]*\d+\.[\s]+(.*)/gim, '<li class="ml-4">$1</li>');
+    text = text.replace(/(<li.*<\/li>)/s, '<ol class="list-decimal ml-6 my-2">$1</ol>');
+    
+    // Blockquotes (> text)
+    text = text.replace(/^> (.*$)/gim, '<blockquote class="border-l-4 border-blue-500 pl-4 my-4 italic text-gray-700 bg-blue-50 p-4 rounded-lg">$1</blockquote>');
+    
+    // Horizontal rules (---, ***, ___)
+    text = text.replace(/^[\s]*[-*_]{3,}[\s]*$/gim, '<hr class="my-4 border-blue-500 opacity-70">');
+    
+    // Tables (basic support)
+    text = text.replace(/\|(.+)\|/g, (match, content) => {
+      const cells = content.split('|').map(cell => `<td class="border border-gray-300 px-3 py-2">${cell.trim()}</td>`).join('');
+      return `<tr>${cells}</tr>`;
+    });
+    text = text.replace(/(<tr>.*<\/tr>)/s, '<table class="border-collapse border border-gray-300 my-4 w-full">$1</table>');
+    
     // Simple paragraphs/line breaks
     const lines = text.split('\n');
-    return lines.map((l) => (l.trim() ? `<p>${l}</p>` : '<p><br/></p>')).join('');
+    const processedLines = lines.map(line => {
+      line = line.trim();
+      // Skip lines that are already HTML tags
+      if (line.startsWith('<') && line.endsWith('>')) {
+        return line;
+      }
+      // Skip empty lines
+      if (!line) {
+        return '<br>';
+      }
+      // Skip list items, headers, blockquotes, etc. that are already processed
+      if (line.startsWith('<li>') || line.startsWith('<h') || line.startsWith('<blockquote>') || 
+          line.startsWith('<hr>') || line.startsWith('<table>') || line.startsWith('<div>')) {
+        return line;
+      }
+      // Regular paragraph
+      return `<p class="mb-2">${line}</p>`;
+    });
+    
+    return processedLines.join('');
   }
 
   // Auto-scroll to bottom
@@ -70,29 +132,23 @@
         id: chat.id,
         title: chat.title,
         createdAt: new Date(chat.createdAt),
-        messages: []
-      }));
-      
-      // Load messages for the first chat
-      if (data.messages && data.messages.length > 0) {
-        const firstChat = chats[0];
-        firstChat.messages = data.messages.map((msg: any) => ({
+        messages: chat.messages ? chat.messages.map((msg: any) => ({
           id: msg.id,
           role: msg.role,
           content: msg.content,
           timestamp: new Date(msg.createdAt),
           parentId: msg.parentId
-        }));
-        activeChat = firstChat;
-      } else {
-        activeChat = chats[0];
-      }
+        })) : []
+      }));
+      
+      // Set the first chat as active
+      activeChat = chats[0];
     } else {
       createNewChat();
     }
   });
 
-  function createNewChat() {
+  async function createNewChat() {
     const newChat: Chat = {
       id: crypto.randomUUID(),
       title: 'New Chat',
@@ -103,17 +159,51 @@
     activeChat = newChat;
     
     // Save to DB
-    fetch('/api/chat/create', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: newChat.id, title: newChat.title })
-    }).catch(console.error);
+    try {
+      await fetch('/api/chat/create', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: newChat.id, title: newChat.title })
+      });
+      
+      // Refresh chats to get the updated data from the server
+      await refreshChats();
+    } catch (error) {
+      console.error('Failed to create chat:', error);
+    }
   }
 
-  function selectChat(chat: Chat) {
+  async function selectChat(chat: Chat) {
     activeChat = null;
     // force DOM reset before setting the new chat to ensure formatting action runs
-    setTimeout(() => {
+    setTimeout(async () => {
+      // Load messages for the selected chat only if they haven't been loaded yet
+      if (!chat.messages || chat.messages.length === 0) {
+        try {
+          const response = await fetch(`/api/chat/message?chatId=${chat.id}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.messages) {
+              chat.messages = data.messages.map((msg: any) => ({
+                id: msg.id,
+                role: msg.role,
+                content: msg.content,
+                timestamp: new Date(msg.createdAt),
+                parentId: msg.parentId
+              }));
+            } else {
+              chat.messages = [];
+            }
+          } else {
+            console.error('Failed to load messages for chat:', chat.id);
+            chat.messages = [];
+          }
+        } catch (error) {
+          console.error('Error loading messages:', error);
+          chat.messages = [];
+        }
+      }
+      
       activeChat = chat;
       // ensure we scroll to bottom of the newly selected chat
       scrollToBottom();
@@ -136,23 +226,63 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id: chatId })
       });
+      
+      // Refresh chats to get the updated data from the server
+      await refreshChats();
     } catch (e) {
       console.error('Failed to delete chat:', e);
     }
   }
 
-  function handleFileSelect(event: Event) {
-    const target = event.target as HTMLInputElement;
-    const file = target.files?.[0];
-    if (file) {
-      uploadedFile = file;
+  async function refreshChats() {
+    try {
+      const response = await fetch('/chat');
+      if (response.ok) {
+        const html = await response.text();
+        // Parse the HTML to extract the data
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const scriptTag = doc.querySelector('script[data-sveltekit-hydrate]');
+        if (scriptTag) {
+          const dataMatch = scriptTag.textContent?.match(/window\.__sveltekit_1\s*=\s*({.*?});/s);
+          if (dataMatch) {
+            try {
+              const newData = JSON.parse(dataMatch[1]);
+              if (newData.chats) {
+                chats = newData.chats.map((chat: any) => ({
+                  id: chat.id,
+                  title: chat.title,
+                  createdAt: new Date(chat.createdAt),
+                  messages: chat.messages ? chat.messages.map((msg: any) => ({
+                    id: msg.id,
+                    role: msg.role,
+                    content: msg.content,
+                    timestamp: new Date(msg.createdAt),
+                    parentId: msg.parentId
+                  })) : []
+                }));
+                
+                // Update active chat if it still exists
+                if (activeChat) {
+                  const updatedActiveChat = chats.find(c => c.id === activeChat.id);
+                  if (updatedActiveChat) {
+                    activeChat = updatedActiveChat;
+                  } else if (chats.length > 0) {
+                    activeChat = chats[0];
+                  }
+                }
+              }
+            } catch (e) {
+              console.error('Failed to parse chat data:', e);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing chats:', error);
     }
   }
 
-  function removeFile() {
-    uploadedFile = null;
-    if (fileInput) fileInput.value = '';
-  }
 
   function getParentMessageContent(msg: Message): string | null {
     if (!msg.parentId || !activeChat) return null;
@@ -163,8 +293,23 @@
   function getParentPreview(msg: Message, maxLen = 160): string | null {
     const c = getParentMessageContent(msg);
     if (!c) return null;
-    const t = c.replace(/\s+/g, ' ').trim();
-    return t.length > maxLen ? t.slice(0, maxLen) + '…' : t;
+    // Strip markdown formatting for cleaner previews
+    const cleanText = c
+      .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold
+      .replace(/__(.*?)__/g, '$1') // Remove bold
+      .replace(/\*(.*?)\*/g, '$1') // Remove italic
+      .replace(/_(.*?)_/g, '$1') // Remove italic
+      .replace(/`([^`]+)`/g, '$1') // Remove inline code
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links, keep text
+      .replace(/^#+\s+/gm, '') // Remove headers
+      .replace(/^[-*+]\s+/gm, '') // Remove list markers
+      .replace(/^\d+\.\s+/gm, '') // Remove ordered list markers
+      .replace(/^>\s+/gm, '') // Remove blockquote markers
+      .replace(/\n/g, ' ') // Replace newlines with spaces
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim();
+    
+    return cleanText.length > maxLen ? cleanText.slice(0, maxLen) + '…' : cleanText;
   }
 
   function isForkedMessage(chat: Chat | null, index: number, msg: Message): boolean {
@@ -202,6 +347,9 @@
 
     loading = true;
     scrollToBottom();
+    
+    // Create new AbortController for this request
+    abortController = new AbortController();
 
     try {
       // Build branch context for forked messages
@@ -229,12 +377,12 @@
           chain.push(userMsg);
           
           console.log('Fork context:', { replyToMessageId, chain: chain.map(m => ({ role: m.role, content: m.content.substring(0, 50) })) });
-          return chain.map(({ role, content }) => ({ role, content }));
+          return chain.map(({ role, content }) => ({ role, content, chatId: activeChat.id }));
         } else {
           // Normal linear conversation - send all messages plus the new user message
           const allMessages = [...activeChat.messages, userMsg];
           console.log('Normal conversation - all messages:', allMessages.map(m => ({ role: m.role, content: m.content.substring(0, 50) })));
-          return allMessages.map(({ role, content }) => ({ role, content }));
+          return allMessages.map(({ role, content }) => ({ role, content, chatId: activeChat.id }));
         }
       })();
 
@@ -274,18 +422,12 @@
       // Clear reply banner after adding message
       replyToMessageId = null;
 
-      const formData = new FormData();
-      formData.append('messages', JSON.stringify(validBranchMessages));
-      
-      if (uploadedFile) {
-        formData.append('file', uploadedFile);
-      }
-
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        body: uploadedFile ? formData : JSON.stringify({ messages: validBranchMessages }),
-        headers: uploadedFile ? {} : { 'content-type': 'application/json' }
-      });
+             const res = await fetch('/api/chat', {
+         method: 'POST',
+         body: JSON.stringify({ messages: validBranchMessages }),
+         headers: { 'content-type': 'application/json' },
+         signal: abortController.signal
+       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -365,11 +507,18 @@
         console.error('Failed to save messages:', e);
       }
 
-      removeFile();
+      
     } catch (e: any) {
-      error = e?.message ?? 'Unknown error';
+      if (e.name === 'AbortError') {
+        // Request was aborted by user
+        console.log('Request was aborted by user');
+        error = null;
+      } else {
+        error = e?.message ?? 'Unknown error';
+      }
     } finally {
       loading = false;
+      abortController = null;
     }
   }
 
@@ -379,6 +528,15 @@
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
       }
     }, 10);
+  }
+
+  function stopResponse() {
+    if (abortController) {
+      abortController.abort();
+      abortController = null;
+    }
+    loading = false;
+    error = null;
   }
 
   // After initial mount or refresh, jump to bottom if there are messages
@@ -405,9 +563,7 @@
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  function toggleSidebar() {
-    sidebarOpen = !sidebarOpen;
-  }
+
 
   function startRename(c: Chat) {
     renamingChatId = c.id;
@@ -428,64 +584,90 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id: c.id, title })
       });
+      
+      // Refresh chats to get the updated data from the server
+      await refreshChats();
     } catch (e) {
       console.error('Failed to rename chat:', e);
     }
   }
 </script>
 
-<div class="fixed inset-0 flex bg-white pt-16">
-  <!-- Sidebar -->
-  <div class={`${sidebarOpen ? 'w-72' : 'w-0'} transition-all duration-300 overflow-hidden bg-gray-50 border-r border-gray-200 flex flex-col min-h-0`}>
+<div class="flex bg-white h-full">
+
+  <!-- Chat Sidebar -->
+  <div class="w-80 bg-gray-50 border-r border-gray-200 flex flex-col min-h-0">
     <div class="p-4 border-b border-gray-200">
-      <button
-        onclick={createNewChat}
-        class="w-full btn btn-primary rounded-lg px-4 py-2 text-sm flex items-center justify-center gap-2 cursor-pointer"
-      >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-        </svg>
-        New Chat
-      </button>
+      <div class="flex gap-2">
+        <button
+          onclick={createNewChat}
+          class="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2 text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-blue-700 transition-colors"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+          </svg>
+          New Chat
+        </button>
+                 <button
+           onclick={refreshChats}
+           class="bg-gray-500 text-white rounded-lg px-3 py-2 text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-gray-600 transition-colors"
+           title="Refresh chats"
+           aria-label="Refresh chats"
+         >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+          </svg>
+        </button>
+      </div>
     </div>
     
     <div class="flex-1 overflow-y-auto p-2">
       {#each chats as chat (chat.id)}
         <div
-          class={`p-3 rounded-lg mb-2 cursor-pointer group relative ${
-            activeChat?.id === chat.id ? 'bg-indigo-100 text-indigo-900' : 'hover:bg-gray-100'
+          class={`p-3 rounded-lg mb-2 cursor-pointer group relative w-full ${
+            activeChat?.id === chat.id ? 'bg-blue-100 text-blue-900' : 'hover:bg-gray-100'
           }`}
           onclick={() => selectChat(chat)}
+          role="button"
+          tabindex="0"
+          onkeydown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              selectChat(chat);
+            }
+          }}
         >
           {#if renamingChatId === chat.id}
             <input
-              class="text-sm font-medium w-full bg-white border border-indigo-300 rounded px-2 py-1"
+              class="text-sm font-medium w-full bg-white border border-blue-300 rounded px-2 py-1"
               bind:value={renameInput}
               onkeydown={(e) => {
                 if (e.key === 'Enter') { e.preventDefault(); confirmRename(chat); }
                 else if (e.key === 'Escape') { renamingChatId = null; }
               }}
               onblur={() => confirmRename(chat)}
-              autofocus
+
             />
           {:else}
             <div class="text-sm font-medium truncate">{chat.title}</div>
           {/if}
           <div class="text-xs text-gray-500 mt-1">{chat.createdAt.toLocaleDateString()}</div>
-          <button
-            onclick={(e) => { e.stopPropagation(); deleteChat(chat.id); }}
-            class="absolute top-2 right-2 text-red-500 hover:text-red-700 text-xs cursor-pointer"
-            aria-label="Delete chat"
-          >
-            ✕
-          </button>
-          <button
-            onclick={(e) => { e.stopPropagation(); startRename(chat); }}
-            class="absolute top-2 right-8 text-gray-500 hover:text-gray-700 text-xs cursor-pointer"
-            aria-label="Rename chat"
-          >
-            ✎
-          </button>
+          <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+            <button
+              onclick={(e) => { e.stopPropagation(); startRename(chat); }}
+              class="text-gray-500 hover:text-gray-700 text-xs cursor-pointer p-1 hover:bg-gray-200 rounded"
+              aria-label="Rename chat"
+            >
+              ✎
+            </button>
+            <button
+              onclick={(e) => { e.stopPropagation(); deleteChat(chat.id); }}
+              class="text-red-500 hover:text-red-700 text-xs cursor-pointer p-1 hover:bg-gray-200 rounded"
+              aria-label="Delete chat"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       {/each}
     </div>
@@ -493,22 +675,17 @@
 
   <!-- Main Chat Area -->
   <div class="flex-1 flex flex-col min-h-0">
-    <!-- Header -->
-    <header class="border-b border-gray-200 p-4 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <button onclick={toggleSidebar} class="text-gray-500 hover:text-gray-700 cursor-pointer">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-          </svg>
-        </button>
-        <h1 class="text-lg font-semibold text-gray-900">
-          {activeChat?.title || 'AI Assistant'}
-        </h1>
-      </div>
-      <div class="text-sm text-gray-500">
-        Hello, {data.user.name || 'User'}
-      </div>
-    </header>
+         <!-- Header -->
+     <header class="border-b border-gray-200 p-4 flex items-center justify-between">
+       <div class="flex items-center gap-3">
+         <h1 class="text-lg font-semibold text-gray-900">
+           {activeChat?.title || 'AI Assistant'}
+         </h1>
+       </div>
+       <div class="text-sm text-gray-500">
+         Hello, {data.user.name || 'User'}
+       </div>
+     </header>
 
     <!-- Messages -->
     <div bind:this={messagesContainer} class="flex-1 overflow-y-auto p-4 space-y-4">
@@ -541,7 +718,7 @@
                   <div class={`rounded-2xl px-4 py-3 ${
                     message.role === 'user' 
                       ? 'bg-indigo-600 text-white' 
-                      : 'bg-gray-100 text-gray-900'
+                      : 'bg-gray-50 text-gray-900 border border-gray-200'
                   }`}>
                     {#if isForkedMessage(activeChat, i, message)}
                       <div class="mb-2 text-xs text-gray-500 italic">
@@ -551,7 +728,7 @@
                     {#if message.role === 'assistant'}
                       <div class="prose prose-sm max-w-none" use:setHtml={{ html: renderMarkdownLite(message.content) }}></div>
                     {:else}
-                      <div class="whitespace-pre-wrap">{message.content.replace(/\n/g, '\n')}</div>
+                      <div class="prose prose-sm max-w-none" use:setHtml={{ html: renderMarkdownLite(message.content) }}></div>
                     {/if}
                   </div>
                 </div>
@@ -566,11 +743,11 @@
       
       {#if loading}
         <div class="flex justify-start">
-          <div class="bg-gray-100 rounded-2xl px-4 py-3">
+          <div class="bg-gray-50 rounded-2xl px-4 py-3 border border-gray-200">
             <div class="flex space-x-1">
-              <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-              <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
-              <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+              <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"></div>
+              <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+              <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
             </div>
           </div>
         </div>
@@ -596,7 +773,7 @@
               <path d="M9 15a3 3 0 0 0-3 3v3"/>
             </svg>
             <div class="text-sm max-w-[80ch] truncate">
-              Replying to: {replyToMessage.content}
+              Replying to: <span use:setHtml={{ html: renderMarkdownLite(replyToMessage.content) }}></span>
             </div>
           </div>
           <button class="text-indigo-700 hover:text-indigo-900 cursor-pointer" aria-label="Cancel reply" title="Cancel reply" onclick={() => (replyToMessageId = null)}>
@@ -604,19 +781,7 @@
           </button>
         </div>
       {/if}
-      {#if uploadedFile}
-        <div class="mb-3 p-3 bg-blue-50 rounded-lg flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
-            </svg>
-            <span class="text-sm text-blue-900">{uploadedFile.name}</span>
-          </div>
-          <button onclick={removeFile} class="text-red-500 hover:text-red-700 cursor-pointer">
-            ✕
-          </button>
-        </div>
-      {/if}
+      
 
       <div class="flex items-end gap-3">
         <div class="flex-1">
@@ -630,34 +795,30 @@
           ></textarea>
         </div>
         
-        <div class="flex gap-2">
-          <input
-            bind:this={fileInput}
-            type="file"
-            accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
-            onchange={handleFileSelect}
-            class="hidden"
-          />
-          <button
-            onclick={() => fileInput?.click()}
-            class="p-3 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
-            title="Upload file"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
-            </svg>
-          </button>
-          
-          <button
-            onclick={sendMessage}
-            disabled={loading || (!input.trim() && !uploadedFile)}
-            class="p-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
-            </svg>
-          </button>
-        </div>
+                 <div class="flex gap-2">
+           <button
+             onclick={sendMessage}
+             disabled={loading || !input.trim()}
+             class="p-3 bg-green-600 text-white rounded-full hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+             aria-label="Send message"
+           >
+             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+             </svg>
+           </button>
+           {#if loading}
+             <button
+               onclick={stopResponse}
+               class="p-3 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors cursor-pointer"
+               aria-label="Stop response"
+               title="Stop response"
+             >
+               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+               </svg>
+             </button>
+           {/if}
+         </div>
       </div>
       
       <div class="mt-2 text-xs text-gray-500 text-center">
@@ -666,3 +827,88 @@
     </div>
   </div>
 </div>
+
+<style>
+  /* Chat-specific styles using basic CSS properties */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .btn:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .btn-primary {
+    background-color: rgb(79 70 229);
+    color: white;
+    height: 2.5rem;
+    padding: 0.5rem 1rem;
+  }
+
+  .btn-primary:hover {
+    background-color: rgb(67 56 202);
+  }
+
+  /* Basic prose styling for markdown elements */
+  .prose {
+    color: rgb(17 24 39);
+  }
+
+  /* Force all code blocks to have dark backgrounds - using direct selectors */
+  .prose div[class*="bg-gray-900"],
+  .prose div[class*="bg-gray-800"] {
+    background-color: rgb(17 24 39) !important;
+    color: rgb(229 231 235) !important;
+    border: 1px solid rgb(75 85 99) !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+    padding: 1rem !important;
+    border-radius: 0.5rem !important;
+    margin: 1rem 0 !important;
+  }
+
+  .prose div[class*="bg-gray-900"] code,
+  .prose div[class*="bg-gray-800"] code {
+    background-color: transparent !important;
+    color: rgb(229 231 235) !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+
+  /* Force all inline code to have dark backgrounds */
+  .prose code {
+    background-color: rgb(31 41 55) !important;
+    color: rgb(229 231 235) !important;
+    border: 1px solid rgb(75 85 99) !important;
+  }
+
+  /* Additional direct targeting for code blocks */
+  .prose [class*="language-"] {
+    background-color: rgb(17 24 39) !important;
+    color: rgb(229 231 235) !important;
+  }
+
+  /* Ensure any element with code-related classes has dark background */
+  .prose [class*="bg-gray-900"],
+  .prose [class*="bg-gray-800"] {
+    background-color: rgb(17 24 39) !important;
+    color: rgb(229 231 235) !important;
+  }
+
+  /* Force user message text to be white */
+  .bg-indigo-600 {
+    color: white !important;
+  }
+
+  .bg-indigo-600 * {
+    color: white !important;
+  }
+</style>

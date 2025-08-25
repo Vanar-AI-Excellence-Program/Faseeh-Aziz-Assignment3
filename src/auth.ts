@@ -98,29 +98,43 @@ export const authOptions = {
   ],
   callbacks: {
     async signIn(params: { user: User; account?: Account | null; profile?: Profile; email?: { verificationRequest?: boolean }; credentials?: Record<string, unknown> }) {
-      const { account: authAccount, profile } = params;
-      if (!authAccount || authAccount.provider === 'credentials') return true;
+      try {
+        const { account: authAccount, profile } = params;
+        if (!authAccount || authAccount.provider === 'credentials') return true;
 
-      const email = (profile as any)?.email as string | undefined;
-      if (!email) return true;
+        const email = (profile as any)?.email as string | undefined;
+        if (!email) return true;
 
-      // Find existing user with the same email
-      const [existingUser] = await db.select().from(user).where(eq(user.email, email.toLowerCase()));
-      if (!existingUser) return true; // No existing user, allow normal account creation
+        // Find existing user with the same email
+        const [existingUser] = await db.select().from(user).where(eq(user.email, email.toLowerCase()));
+        if (!existingUser) return true; // No existing user, allow normal account creation
 
-      // Check if this specific provider is already linked
-      const linkedAccounts = await db.select().from(account).where(eq(account.userId, existingUser.id));
-      const linkedProviders = linkedAccounts.map((a) => a.provider);
+        // Check if user is disabled - if yes, let them complete OAuth but we'll catch them in post-auth
+        if (existingUser.disabled) {
+          console.log(`User is disabled but allowing OAuth completion: ${existingUser.email}`);
+          console.log(`User details:`, { id: existingUser.id, email: existingUser.email, disabled: existingUser.disabled });
+          
+          // Return true to let OAuth complete, we'll redirect them in post-auth
+          return true;
+        }
 
-      if (!linkedProviders.includes(authAccount.provider)) {
-        // Provider not linked yet, but user exists with same email
-        // Allow the sign-in to proceed - Auth.js will automatically link the account
-        console.log(`Linking ${authAccount.provider} account to existing user: ${existingUser.email}`);
+        // Check if this specific provider is already linked
+        const linkedAccounts = await db.select().from(account).where(eq(account.userId, existingUser.id));
+        const linkedProviders = linkedAccounts.map((a) => a.provider);
+
+        if (!linkedProviders.includes(authAccount.provider)) {
+          // Provider not linked yet, but user exists with same email
+          // Allow the sign-in to proceed - Auth.js will automatically link the account
+          console.log(`Linking ${authAccount.provider} account to existing user: ${existingUser.email}`);
+          return true;
+        }
+
+        // Provider already linked, proceed normally
         return true;
+      } catch (error) {
+        console.error('Error in signIn callback:', error);
+        return false; // Block sign-in on any error
       }
-
-      // Provider already linked, proceed normally
-      return true;
     },
 
     async session({ session, user }: { session: any; user: any }) {
@@ -142,8 +156,7 @@ export const authOptions = {
   },
   pages: { 
     signIn: '/login',
-    signOut: '/login',
-    error: '/login'
+    signOut: '/login'
   },
   events: {
     async signIn(params: { user: User; account?: Account | null; profile?: Profile }) {
@@ -155,23 +168,41 @@ export const authOptions = {
             await db
               .update(user)
               .set({
-                name: profile.name || authUser.name,
-                email: profile.email || authUser.email,
-                image: profile.picture || authUser.image
+                name: profile.name || authUser.name || null,
+                email: profile.email || authUser.email || '',
+                image: profile.picture || authUser.image || null, // Google profile has picture property
+                emailVerified: new Date() // Auto-verify email for OAuth users
               })
               .where(eq(user.id, authUser.id));
           } else if (authAccount.provider === 'github') {
             await db
               .update(user)
               .set({
-                name: profile.name || authUser.name,
-                email: profile.email || authUser.email,
-                image: profile.avatar_url || authUser.image
+                name: profile.name || authUser.name || null,
+                email: profile.email || authUser.email || '',
+                image: (profile as any).avatar_url || authUser.image || null, // GitHub profile has avatar_url property
+                emailVerified: new Date() // Auto-verify email for OAuth users
               })
               .where(eq(user.id, authUser.id));
           }
         } catch (error) {
           console.error('Error updating user profile:', error);
+        }
+      }
+    },
+
+    async createUser(params: { user: User; account?: Account | null; profile?: Profile }) {
+      const { user: authUser, account: authAccount } = params;
+      // Auto-verify email for new OAuth users
+      if (authAccount && authAccount.provider !== 'credentials' && authUser && authUser.id) {
+        try {
+          await db
+            .update(user)
+            .set({ emailVerified: new Date() })
+            .where(eq(user.id, authUser.id));
+          console.log(`Auto-verified email for new ${authAccount.provider} user: ${authUser.email}`);
+        } catch (error) {
+          console.error('Error auto-verifying email for new OAuth user:', error);
         }
       }
     },

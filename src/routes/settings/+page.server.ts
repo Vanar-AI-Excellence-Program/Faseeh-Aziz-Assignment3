@@ -9,15 +9,17 @@ export const load: PageServerLoad = async ({ locals }) => {
   const session = await locals.auth();
   if (!session?.user?.id) throw redirect(303, '/login');
 
-  // Type assertion for the user role
-  const userRole = (session.user as any).role;
+  // Always fetch fresh user data from database to get latest role
+  const [userData] = await db.select().from(user).where(eq(user.id, session.user.id));
+  if (!userData) throw redirect(303, '/login');
+  if (userData.disabled) throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
 
   return { 
     user: { 
-      id: session.user.id,
-      email: session.user.email, 
-      name: session.user.name, 
-      role: userRole
+      id: userData.id,
+      email: userData.email, 
+      name: userData.name, 
+      role: userData.role
     } 
   };
 };
@@ -46,6 +48,7 @@ export const actions: Actions = {
 
       // Update name
       const updateData: any = { name };
+      let isPasswordUpdated = false;
 
       // Handle password update if provided
       if (newPassword) {
@@ -71,12 +74,17 @@ export const actions: Actions = {
 
         // Hash new password
         updateData.hashedPassword = await hash(newPassword, 10);
+        isPasswordUpdated = true;
       }
 
       // Update user in database
       await db.update(user).set(updateData).where(eq(user.id, session.user.id));
 
-      return { success: true, message: 'Profile updated successfully' };
+      if (isPasswordUpdated) {
+        return { success: true, message: 'Password updated successfully', passwordUpdated: true };
+      } else {
+        return { success: true, message: 'Profile updated successfully' };
+      }
     } catch (error) {
       console.error('Profile update error:', error);
       return fail(500, { error: 'Failed to update profile' });

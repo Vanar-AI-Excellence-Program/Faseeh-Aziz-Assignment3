@@ -8,7 +8,5 @@ export async function handleLogout() {
     });
   } catch (error) {
     console.error('Logout error:', error);
-    // Fallback: redirect to login page
-    window.location.href = '/';
   }
 }

@@ -1,4 +1,5 @@
 import type { LayoutServerLoad } from './$types';
+import { redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { user, session } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
@@ -8,7 +9,21 @@ export const load: LayoutServerLoad = async ({ locals, cookies }) => {
   try {
     const authSession = await locals.auth();
     if (authSession?.user) {
-      return { viewer: authSession.user };
+      // Always fetch fresh user data from database to get latest role
+      const [userData] = await db.select().from(user).where(eq(user.id, authSession.user.id));
+      if (userData && !userData.disabled) {
+        return { 
+          viewer: { 
+            id: userData.id, 
+            email: userData.email, 
+            name: userData.name, 
+            role: userData.role 
+          } 
+        };
+      } else if (userData?.disabled) {
+        // User is disabled, redirect to login with error
+        throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
+      }
     }
   } catch (error) {
     // Auth.js session failed, try manual session
@@ -30,6 +45,9 @@ export const load: LayoutServerLoad = async ({ locals, cookies }) => {
               role: userData.role 
             } 
           };
+        } else if (userData?.disabled) {
+          // User is disabled, redirect to login with error
+          throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
         }
       }
     } catch (error) {

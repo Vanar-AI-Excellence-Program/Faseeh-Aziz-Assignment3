@@ -10,19 +10,26 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
   try {
     const authSession = await locals.auth();
     if (authSession?.user?.id) {
-      const userRole = (authSession.user as any).role;
-      if (userRole !== 'admin') throw redirect(303, '/');
+      // Always fetch fresh user data from database to get latest role
+      const [userData] = await db.select().from(user).where(eq(user.id, authSession.user.id));
+      if (!userData || userData.role !== 'admin') throw redirect(303, '/user');
+      if (userData.disabled) throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
 
-      const stats = await getUserStats();
+      const rawStats = await getUserStats();
       return { 
         user: { 
-          id: authSession.user.id,
-          email: authSession.user.email, 
-          name: authSession.user.name, 
-          role: userRole
+          id: userData.id,
+          email: userData.email, 
+          name: userData.name, 
+          role: userData.role
         }, 
-        users: stats.users, 
-        stats 
+        stats: {
+          totalUsers: rawStats.total,
+          verifiedUsers: rawStats.users.filter(u => !u.disabled).length,
+          unverifiedUsers: rawStats.disabled,
+          adminUsers: rawStats.admins,
+          regularUsers: rawStats.users.filter(u => u.role === 'user').length
+        }
       };
     }
   } catch (error) {
@@ -37,9 +44,10 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
   if (!sessionData || sessionData.expires <= new Date()) throw redirect(303, '/login');
 
   const [userData] = await db.select().from(user).where(eq(user.id, sessionData.userId));
-  if (!userData || userData.disabled || userData.role !== 'admin') throw redirect(303, '/');
+  if (!userData || userData.role !== 'admin') throw redirect(303, '/user');
+  if (userData.disabled) throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
 
-  const stats = await getUserStats();
+  const rawStats = await getUserStats();
   return { 
     user: { 
       id: userData.id,
@@ -47,8 +55,13 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
       name: userData.name, 
       role: userData.role
     }, 
-    users: stats.users, 
-    stats 
+    stats: {
+      totalUsers: rawStats.total,
+      verifiedUsers: rawStats.users.filter(u => !u.disabled).length,
+      unverifiedUsers: rawStats.disabled,
+      adminUsers: rawStats.admins,
+      regularUsers: rawStats.users.filter(u => u.role === 'user').length
+    }
   };
 };
 
@@ -61,8 +74,12 @@ export const actions: Actions = {
     try {
       const authSession = await locals.auth();
       if (authSession?.user?.id) {
-        userRole = (authSession.user as any).role;
-        userId = authSession.user.id;
+        // Always fetch fresh user data from database
+        const [userData] = await db.select().from(user).where(eq(user.id, authSession.user.id));
+        if (userData && userData.role === 'admin') {
+          userRole = userData.role;
+          userId = userData.id;
+        }
       }
     } catch (error) {
       // Fallback to manual session
@@ -122,8 +139,12 @@ export const actions: Actions = {
     try {
       const authSession = await locals.auth();
       if (authSession?.user?.id) {
-        userRole = (authSession.user as any).role;
-        userId = authSession.user.id;
+        // Always fetch fresh user data from database
+        const [userData] = await db.select().from(user).where(eq(user.id, authSession.user.id));
+        if (userData && userData.role === 'admin') {
+          userRole = userData.role;
+          userId = userData.id;
+        }
       }
     } catch (error) {
       // Fallback to manual session
