@@ -1,0 +1,39 @@
+import type { LayoutServerLoad } from './$types';
+import { redirect } from '@sveltejs/kit';
+import { db } from '$lib/server/db';
+import { user, session } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
+
+export const load: LayoutServerLoad = async ({ locals, cookies }) => {
+  // Use manual session check since global auth handle is disabled
+
+  // Fallback to manual session check
+  const sessionToken = cookies.get('authjs.session-token');
+  if (sessionToken) {
+    try {
+      const [sessionData] = await db.select().from(session).where(eq(session.sessionToken, sessionToken));
+      if (sessionData && sessionData.expires > new Date()) {
+        const [userData] = await db.select().from(user).where(eq(user.id, sessionData.userId));
+        if (userData && !userData.disabled) {
+          return { 
+            viewer: { 
+              id: userData.id, 
+              email: userData.email, 
+              name: userData.name, 
+              role: userData.role 
+            } 
+          };
+        } else if (userData?.disabled) {
+          // User is disabled, redirect to login with error
+          throw redirect(303, `/login?error=disabled&message=${encodeURIComponent('Account is disabled. Please contact an administrator.')}`);
+        }
+      }
+    } catch (error) {
+      // Session validation failed
+    }
+  }
+
+  return { viewer: null };
+};
+
+
