@@ -43,7 +43,7 @@
   });
 
   // Check if current page is a post-login page
-  const isPostLoginPage = $derived(browser && ['/dashboard', '/user', '/chat', '/settings', '/admin/users'].includes($page.url.pathname));
+  const isPostLoginPage = $derived(browser && ['/dashboard', '/user', '/chat', '/documents', '/settings', '/admin/users'].includes($page.url.pathname));
 
   // Role-based redirect logic (fallback for edge cases)
   $effect(() => {
@@ -185,6 +185,13 @@
                   </svg>
                   <span>AI Chat</span>
                 </a>
+                
+                <a href="/documents" class="nav-item" class:active={$page.url.pathname === '/documents'}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  </svg>
+                  <span>Knowledge Base</span>
+                </a>
               </div>
 
               {#if ($page.data.user?.role || $page.data.viewer?.role) === 'admin'}
@@ -237,6 +244,7 @@
                       {#if $page.url.pathname === '/dashboard'}Dashboard
                       {:else if $page.url.pathname === '/admin/users'}User Management
                       {:else if $page.url.pathname === '/chat'}AI Chat
+                      {:else if $page.url.pathname === '/documents'}Knowledge Base
                       {:else if $page.url.pathname === '/settings'}Settings
                       {:else if $page.url.pathname === '/user'}Profile
                       {:else}Dashboard{/if}

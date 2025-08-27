@@ -152,3 +152,51 @@ export const account = pgTable("account", {
 		}).onDelete("cascade"),
 	primaryKey({ columns: [table.provider, table.providerAccountId], name: "account_provider_providerAccountId_pk"}),
 ]);
+
+// RAG Schema Tables
+export const documents = pgTable("documents", {
+	id: text().primaryKey().notNull(),
+	userId: text("user_id").notNull(),
+	name: text().notNull(),
+	metadata: text(), // JSON string for document metadata
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.userId],
+		foreignColumns: [user.id],
+		name: "documents_user_id_user_id_fk"
+	}).onDelete("cascade"),
+	index("idx_documents_user_id").on(table.userId),
+]);
+
+export const chunks = pgTable("chunks", {
+	id: text().primaryKey().notNull(),
+	documentId: text("document_id").notNull(),
+	text: text().notNull(),
+	metadata: text(), // JSON string for chunk metadata
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.documentId],
+		foreignColumns: [documents.id],
+		name: "chunks_document_id_documents_id_fk"
+	}).onDelete("cascade"),
+	index("idx_chunks_document_id").on(table.documentId),
+]);
+
+export const embeddings = pgTable("embeddings", {
+	id: text().primaryKey().notNull(),
+	chunkId: text("chunk_id").notNull(),
+	vector: sql`vector(1536)`, // OpenAI embeddings are 1536 dimensions
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.chunkId],
+		foreignColumns: [chunks.id],
+		name: "embeddings_chunk_id_chunks_id_fk"
+	}).onDelete("cascade"),
+	index("idx_embeddings_chunk_id").on(table.chunkId),
+	// Vector similarity search index
+	index("idx_embeddings_vector").on(sql`vector_cosine_similarity(${table.vector}, $1)`),
+]);

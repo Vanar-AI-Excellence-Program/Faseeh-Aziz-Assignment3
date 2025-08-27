@@ -4,6 +4,7 @@ import { db } from '$lib/server/db';
 import { chat, message, chatMessages, chatBranches, messageBranches } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { env } from '$env/dynamic/private';
+import { ragService } from '$lib/server/rag';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   try {
@@ -73,13 +74,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     // Try to use AI API if available, otherwise fall back to basic responses
     let aiResponse = '';
+    let citations: any[] = [];
     
     try {
       // Check if we have Google Generative AI API key
       if (env.GOOGLE_GENERATIVE_AI_API_KEY) {
         console.log('Using Google Generative AI API');
         // Use Google Generative AI API
-        aiResponse = await callGoogleGenerativeAI(messages, uploadedFile);
+        const aiResult = await callGoogleGenerativeAI(messages, uploadedFile, session.user.id);
+        aiResponse = aiResult.response;
+        citations = aiResult.citations;
         } else {
         console.log('No Google Generative AI API key found, using basic responses');
         // Fall back to basic responses
@@ -196,6 +200,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
           originalMessageId: aiMessageId,
           role: 'assistant',
           content: aiResponse,
+          chunkCitations: citations.length > 0 ? JSON.stringify(citations) : null,
           timestamp: new Date(),
           createdAt: new Date()
         });
@@ -287,9 +292,36 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 };
 
 // Google Generative AI API integration
-async function callGoogleGenerativeAI(messages: any[], file: File | null): Promise<string> {
+async function callGoogleGenerativeAI(messages: any[], file: File | null, userId: string): Promise<{ response: string; citations: any[] }> {
   const apiKey = env.GOOGLE_GENERATIVE_AI_API_KEY;
   if (!apiKey) throw new Error('Google Generative AI API key not configured');
+
+  // Get the latest user message for RAG search
+  const latestUserMessage = messages.filter(m => m.role === 'user').pop();
+  let ragContext = '';
+  let citations: any[] = [];
+
+  // Perform RAG search if we have a user message
+  if (latestUserMessage && userId) {
+    try {
+      const searchResults = await ragService.searchChunks(userId, latestUserMessage.content, 3);
+      if (searchResults && searchResults.length > 0) {
+        ragContext = '\n\n## Relevant Context from Your Knowledge Base:\n\n';
+        citations = searchResults.map((result, index) => {
+          ragContext += `**Document ${index + 1}**: ${result.documentName}\n`;
+          ragContext += `**Content**: ${result.text}\n\n`;
+          return {
+            document: result.documentName,
+            text: result.text,
+            similarity: result.similarity
+          };
+        });
+      }
+    } catch (error) {
+      console.error('RAG search error:', error);
+      // Continue without RAG context if search fails
+    }
+  }
 
   // Convert messages to Google's format
   const contents = messages.map(msg => ({
@@ -297,10 +329,10 @@ async function callGoogleGenerativeAI(messages: any[], file: File | null): Promi
     parts: [{ text: msg.content }]
   }));
 
-  // Add system prompt to ensure markdown formatting
+  // Add system prompt to ensure markdown formatting and RAG integration
   const systemPrompt = {
     role: 'user',
-    parts: [{ text: `You are a helpful AI programming assistant. Always respond using proper markdown formatting including:
+    parts: [{ text: `You are a helpful AI programming assistant with access to the user's knowledge base. Always respond using proper markdown formatting including:
 
 - Use **bold** for emphasis and important terms
 - Use *italic* for code concepts and file names
@@ -312,8 +344,18 @@ async function callGoogleGenerativeAI(messages: any[], file: File | null): Promi
 - Use [link text](url) for any relevant links
 - Structure your responses with clear sections using headers
 
+When you use information from the user's knowledge base, cite the source document at the end of your response.
+
 Make your responses well-formatted and easy to read.` }]
   };
+
+  // Add RAG context if available
+  if (ragContext) {
+    contents.unshift({
+      role: 'user',
+      parts: [{ text: ragContext }]
+    });
+  }
 
   // Add file context if available
   if (file) {
@@ -368,7 +410,18 @@ Make your responses well-formatted and easy to read.` }]
   }
 
   const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I couldn\'t generate a response.';
+  const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I couldn\'t generate a response.';
+  
+  // Add citations to the response if we have any
+  let finalResponse = responseText;
+  if (citations.length > 0) {
+    finalResponse += '\n\n---\n\n**Sources:**\n';
+    citations.forEach((citation, index) => {
+      finalResponse += `${index + 1}. **${citation.document}** (similarity: ${(citation.similarity * 100).toFixed(1)}%)\n`;
+    });
+  }
+  
+  return { response: finalResponse, citations };
 }
 
 // Fallback basic response generator

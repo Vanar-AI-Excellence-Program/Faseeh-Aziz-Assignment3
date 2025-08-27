@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres
+    image: pgvector/pgvector:pg16
     restart: always
     ports:
       - 5433:5432
@@ -10,5 +10,17 @@ services:
       POSTGRES_DB: auth_chat_db
     volumes:
       - pgdata:/var/lib/postgresql/data
+    command: postgres -c shared_preload_libraries=vector
+
+  embedding-service:
+    build: ./embedding-service
+    restart: always
+    ports:
+      - 8001:8000
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - db
+
 volumes:
   pgdata:

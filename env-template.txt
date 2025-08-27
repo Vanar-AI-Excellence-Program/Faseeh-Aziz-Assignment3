@@ -3,8 +3,14 @@ Copy these environment variables to a new file named ".env" in your project root
 # Gemini AI API Configuration
 GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_api_key_here
 
+# OpenAI API Configuration (for embeddings)
+OPENAI_API_KEY=your_openai_api_key_here
+
 # Database Configuration
 DATABASE_URL=postgresql://postgres:password@localhost:5433/auth_chat_db
+
+# Embedding Service Configuration
+EMBEDDING_API_URL=http://localhost:8001
 
 # Auth.js secret key (generate a random string)
 AUTH_SECRET=your_auth_secret_here
@@ -42,7 +48,7 @@ SETUP INSTRUCTIONS:
 
 Your app will be available at: http://localhost:5173
 Database will be available at: localhost:5433
-Redis will be available at: localhost:6379
+Embedding service will be available at: http://localhost:8001
 
 ===========================================
 HOW TO GET CREDENTIALS:
@@ -64,6 +70,10 @@ HOW TO GET CREDENTIALS:
    - Go to https://makersuite.google.com/app/apikey
    - Create a new API key
 
-4. Gmail App Password:
+4. OpenAI API:
+   - Go to https://platform.openai.com/api-keys
+   - Create a new API key for embeddings
+
+5. Gmail App Password:
    - Enable 2-factor authentication on your Gmail account
    - Generate an app password for this application
