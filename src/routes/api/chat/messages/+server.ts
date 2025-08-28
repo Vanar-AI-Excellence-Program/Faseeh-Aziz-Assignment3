@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { chatMessages, chatBranches, messageBranches } from '$lib/server/db/schema';
-import { eq, and, asc, desc } from 'drizzle-orm';
+import { eq, and, asc, desc, inArray } from 'drizzle-orm';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
   try {
@@ -13,6 +13,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
     const conversationId = url.searchParams.get('conversationId');
     const branchId = url.searchParams.get('branchId') || 'main';
+    const limit = parseInt(url.searchParams.get('limit') || '50');
+    const offset = parseInt(url.searchParams.get('offset') || '0');
     
     if (!conversationId) {
       return json({ error: 'Conversation ID is required' }, { status: 400 });
@@ -34,7 +36,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
     console.log('Found', branches.length, 'branches for conversation:', conversationId);
 
-    // Get all messages for this conversation
+    // Get messages with pagination
     const allMessages = await db
       .select()
       .from(chatMessages)
@@ -42,18 +44,22 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         eq(chatMessages.conversationId, conversationId),
         eq(chatMessages.userId, userId)
       ))
-      .orderBy(asc(chatMessages.createdAt));
+      .orderBy(desc(chatMessages.createdAt))
+      .limit(limit)
+      .offset(offset);
 
     console.log('Found', allMessages.length, 'total messages for conversation:', conversationId);
 
-    // Get all message-branch relationships for this conversation
-    const messageBranchRelations = await db
+    // Get message-branch relationships (limited to current messages)
+    const messageIds = allMessages.map(msg => msg.id);
+    const messageBranchRelations = messageIds.length > 0 ? await db
       .select()
       .from(messageBranches)
       .where(and(
         eq(messageBranches.conversationId, conversationId),
-        eq(messageBranches.userId, userId)
-      ));
+        eq(messageBranches.userId, userId),
+        inArray(messageBranches.messageId, messageIds)
+      )) : [];
 
     console.log('Found', messageBranchRelations.length, 'message-branch relationships for conversation:', conversationId);
 
@@ -136,7 +142,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       success: true, 
       messages: groupedMessages,
       branches: mappedBranches,
-      currentBranchId: branchId
+      currentBranchId: branchId,
+      hasMore: allMessages.length === limit
     });
   } catch (error) {
     console.error('Error fetching messages with branches:', error);

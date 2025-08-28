@@ -1,6 +1,4 @@
 # Environment variables
-.env
-.env.local
 .env.development.local
 .env.test.local
 .env.production.local
@@ -9,6 +7,8 @@
 env-variables.txt
 setup-env.bat
 setup-env.ps1
+.env.new
+.env.temp
 
 # Dependencies
 node_modules/
@@ -87,7 +87,6 @@ tmp/
 temp/
 
 # Editor directories and files
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -109,3 +108,4 @@ Thumbs.db
 
 # Docker
 .dockerignore
+config.bat

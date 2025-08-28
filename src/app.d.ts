@@ -3,23 +3,34 @@
 declare global {
 	namespace App {
 		// interface Error {}
-		// interface Locals {}
-		// interface PageData {}
+		interface Locals {
+			auth(): Promise<import('@auth/core/types').Session | null>;
+		}
+
+		interface PageData {
+			form?: {
+				action?: string;
+				error?: boolean;
+				message?: string;
+				success?: boolean;
+			};
+		}
 		// interface PageState {}
 		// interface Platform {}
-			interface Locals {
-		auth(): Promise<import('@auth/core/types').Session | null>;
+	}
+}
+
+declare module 'pdf-parse' {
+	interface PDFData {
+		text: string;
+		numpages: number;
+		info: any;
+		metadata: any;
+		version: string;
 	}
 
-	interface PageData {
-		form?: {
-			action?: string;
-			error?: boolean;
-			message?: string;
-			success?: boolean;
-		};
-	}
-	}
+	function pdf(buffer: Buffer): Promise<PDFData>;
+	export = pdf;
 }
 
 export {};

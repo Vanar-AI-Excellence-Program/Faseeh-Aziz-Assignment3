@@ -22,3 +22,4 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ error: 'Failed to search chunks' }, { status: 500 });
   }
 };
+

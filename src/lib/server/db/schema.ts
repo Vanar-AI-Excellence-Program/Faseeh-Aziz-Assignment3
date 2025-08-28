@@ -135,3 +135,30 @@ export const chat = pgTable('chat', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+
+// ===================
+// RAG Schema Tables
+// ===================
+export const documents = pgTable('documents', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  metadata: text('metadata'), // JSON string for document metadata
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const chunks = pgTable('chunks', {
+  id: text('id').primaryKey(),
+  documentId: text('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  text: text('text').notNull(),
+  metadata: text('metadata'), // JSON string for chunk metadata
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const embeddings = pgTable('embeddings', {
+  id: text('id').primaryKey(),
+  chunkId: text('chunk_id').notNull().references(() => chunks.id, { onDelete: 'cascade' }),
+  vector: text('vector').notNull(), // Store as JSON string for now
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});

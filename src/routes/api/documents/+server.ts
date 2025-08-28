@@ -2,7 +2,6 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { ragService } from '$lib/server/rag';
 import { getServerSession } from '@auth/sveltekit';
-import { auth } from '$lib/server/auth';
 
 export const GET: RequestHandler = async ({ locals }) => {
   try {
@@ -34,13 +33,41 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       return json({ error: 'File and name are required' }, { status: 400 });
     }
 
-    // Read file content
-    const content = await file.text();
+    // Validate file type
+    const fileExtension = file.name.toLowerCase().split('.').pop();
+    const supportedTypes = ['txt', 'pdf'];
+    
+    if (!fileExtension || !supportedTypes.includes(fileExtension)) {
+      return json({ 
+        error: 'Unsupported file type. Please upload .txt or .pdf files only.' 
+      }, { status: 400 });
+    }
+
+    let content: string;
+    let fileType: string;
+
+    // Extract content based on file type
+    if (fileExtension === 'pdf') {
+      // Temporarily disable PDF support due to import issues
+      return json({ 
+        error: 'PDF upload is temporarily disabled. Please upload .txt files only.' 
+      }, { status: 400 });
+    } else {
+      // Handle text files (existing functionality)
+      content = await file.text();
+      fileType = 'txt';
+      
+      // Validate text content
+      if (!content || content.trim().length === 0) {
+        return json({ error: 'Text file appears to be empty' }, { status: 400 });
+      }
+    }
     
     // Extract metadata
     const metadata = {
       filename: file.name,
       fileType: file.type,
+      originalFileType: fileType,
       size: file.size,
       uploadedAt: new Date().toISOString(),
     };
@@ -52,9 +79,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       metadata
     );
 
-    return json({ success: true, ...result });
+    return json({ 
+      success: true, 
+      fileType: fileType,
+      chunksInserted: result.chunksCreated,
+      ...result 
+    });
   } catch (error) {
     console.error('Error uploading document:', error);
     return json({ error: 'Failed to upload document' }, { status: 500 });
   }
 };
+

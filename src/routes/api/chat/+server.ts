@@ -234,6 +234,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
           // Check if the stream has been aborted
           if (isAborted || index >= words.length) {
             try {
+              // Send citations metadata at the end
+              if (citations.length > 0) {
+                controller.enqueue(new TextEncoder().encode(`1:${JSON.stringify({ citations })}\n`));
+              }
               controller.close();
             } catch (e) {
               // Ignore errors when closing an already closed controller
@@ -251,6 +255,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
               setTimeout(sendChunk, 100); // Simulate typing delay
             } else {
               try {
+                // Send citations metadata at the end
+                if (citations.length > 0) {
+                  controller.enqueue(new TextEncoder().encode(`1:${JSON.stringify({ citations })}\n`));
+                }
                 controller.close();
               } catch (e) {
                 // Ignore errors when closing an already closed controller
@@ -304,19 +312,23 @@ async function callGoogleGenerativeAI(messages: any[], file: File | null, userId
   // Perform RAG search if we have a user message
   if (latestUserMessage && userId) {
     try {
-      const searchResults = await ragService.searchChunks(userId, latestUserMessage.content, 3);
-      if (searchResults && searchResults.length > 0) {
-        ragContext = '\n\n## Relevant Context from Your Knowledge Base:\n\n';
-        citations = searchResults.map((result, index) => {
-          ragContext += `**Document ${index + 1}**: ${result.documentName}\n`;
-          ragContext += `**Content**: ${result.text}\n\n`;
-          return {
-            document: result.documentName,
-            text: result.text,
-            similarity: result.similarity
-          };
-        });
-      }
+      // Temporarily disabled RAG search due to embedding service issues
+      // const searchResults = await ragService.searchChunks(userId, latestUserMessage.content, 5);
+      // if (searchResults && searchResults.length > 0) {
+      //   ragContext = '\n\n## Relevant Context from Your Knowledge Base:\n\n';
+      //   citations = searchResults.map((result, index) => {
+      //     const chunkIndex = result.metadata?.chunkIndex || 0;
+      //     ragContext += `**Document ${index + 1}**: ${result.documentName} (chunk ${chunkIndex})\n`;
+      //     ragContext += `**Content**: ${result.text}\n\n`;
+      //     return {
+      //       documentId: result.documentId,
+      //       documentName: result.documentName,
+      //       chunkIndex: chunkIndex,
+      //       text: result.text,
+      //       similarity: result.similarity
+      //     };
+      //   });
+      // }
     } catch (error) {
       console.error('RAG search error:', error);
       // Continue without RAG context if search fails
@@ -337,14 +349,14 @@ async function callGoogleGenerativeAI(messages: any[], file: File | null, userId
 - Use **bold** for emphasis and important terms
 - Use *italic* for code concepts and file names
 - Use \`inline code\` for code snippets, variables, and commands
-- Use \`\`\`language\ncode blocks\n\`\`\` for longer code examples
+- Use \`\`\`language\ncode blocks\n\`\`\` for longer code examples with proper syntax highlighting
 - Use # ## ### for headers to organize your responses
 - Use - or * for bullet points in lists
 - Use > for blockquotes when referencing or explaining concepts
 - Use [link text](url) for any relevant links
 - Structure your responses with clear sections using headers
 
-When you use information from the user's knowledge base, cite the source document at the end of your response.
+When you use information from the user's knowledge base, include citation markers like [doc:{document_id}, chunk:{chunk_index}] in your response where appropriate.
 
 Make your responses well-formatted and easy to read.` }]
   };
@@ -417,7 +429,7 @@ Make your responses well-formatted and easy to read.` }]
   if (citations.length > 0) {
     finalResponse += '\n\n---\n\n**Sources:**\n';
     citations.forEach((citation, index) => {
-      finalResponse += `${index + 1}. **${citation.document}** (similarity: ${(citation.similarity * 100).toFixed(1)}%)\n`;
+      finalResponse += `${index + 1}. **${citation.documentName}** (chunk ${citation.chunkIndex}) - [doc:${citation.documentId}, chunk:${citation.chunkIndex}] (similarity: ${(citation.similarity * 100).toFixed(1)}%)\n`;
     });
   }
   

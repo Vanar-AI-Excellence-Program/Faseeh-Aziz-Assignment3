@@ -6,14 +6,10 @@
     export let className: string = '';
 
     let container: HTMLDivElement;
-
     // Configure marked for security
     marked.setOptions({
         breaks: true, // Convert line breaks to <br>
-        gfm: true,    // GitHub Flavored Markdown
-        sanitize: false, // We'll handle sanitization ourselves
-        smartLists: true,
-        smartypants: true
+        gfm: true    // GitHub Flavored Markdown
     });
 
     // Simple HTML sanitization function
@@ -71,15 +67,37 @@
         }
     }
 
-    // Render markdown to HTML with copy buttons for code blocks
-    function renderMarkdown(text: string): string {
+    // Highlight code with syntax highlighting (simplified without shiki)
+    function highlightCode(code: string, language: string): string {
+        return `<code class="language-${language}">${escapeHtml(code)}</code>`;
+    }
+
+    // Escape HTML entities
+    function escapeHtml(text: string): string {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Safe base64 encoding
+    function safeBtoa(str: string): string {
         try {
-            let html = marked(text);
+            return btoa(unescape(encodeURIComponent(str)));
+        } catch (error) {
+            console.error('Error encoding string to base64:', error);
+            return btoa(str || '');
+        }
+    }
+
+    // Render markdown to HTML with copy buttons and syntax highlighting for code blocks
+    async function renderMarkdown(text: string): Promise<string> {
+        try {
+            let html = await marked(text);
             
-            // Add copy buttons to code blocks
+            // Add copy buttons and syntax highlighting to code blocks
             html = html.replace(
-                /<pre><code[^>]*>([\s\S]*?)<\/code><\/pre>/g,
-                (match, codeContent) => {
+                /<pre><code[^>]*class="language-([^"]*)"[^>]*>([\s\S]*?)<\/code><\/pre>/g,
+                (match: string, language: string, codeContent: string) => {
                     const decodedContent = codeContent
                         .replace(/&lt;/g, '<')
                         .replace(/&gt;/g, '>')
@@ -87,18 +105,54 @@
                         .replace(/&quot;/g, '"')
                         .replace(/&#39;/g, "'");
                     
-                    return `
-                        <div class="code-block-wrapper">
-                            <button 
-                                class="copy-button" 
-                                data-code="${btoa(decodedContent)}"
-                                title="Copy code"
-                            >
-                                <svg class="copy-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                                </svg>
-                            </button>
-                            ${match}
+                    const highlightedCode = highlightCode(decodedContent, language);
+                    
+                                         return `
+                         <div class="code-block-wrapper">
+                             <div class="code-header">
+                                 <span class="language-label">${language}</span>
+                                 <button 
+                                     class="copy-button" 
+                                     data-code="${safeBtoa(decodedContent || '')}"
+                                     title="Copy code"
+                                 >
+                                    <svg class="copy-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <pre><code class="language-${language}">${highlightedCode}</code></pre>
+                        </div>
+                    `;
+                }
+            );
+
+            // Handle code blocks without language specification
+            html = html.replace(
+                /<pre><code>([\s\S]*?)<\/code><\/pre>/g,
+                (match: string, codeContent: string) => {
+                    const decodedContent = codeContent
+                        .replace(/&lt;/g, '<')
+                        .replace(/&gt;/g, '>')
+                        .replace(/&amp;/g, '&')
+                        .replace(/&quot;/g, '"')
+                        .replace(/&#39;/g, "'");
+                    
+                                         return `
+                         <div class="code-block-wrapper">
+                             <div class="code-header">
+                                 <span class="language-label">text</span>
+                                 <button 
+                                     class="copy-button" 
+                                     data-code="${safeBtoa(decodedContent || '')}"
+                                     title="Copy code"
+                                 >
+                                    <svg class="copy-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <pre><code>${escapeHtml(decodedContent)}</code></pre>
                         </div>
                     `;
                 }
@@ -135,25 +189,45 @@
             buttonElement = buttonElement.parentElement as HTMLElement;
         }
         
-        if (buttonElement && buttonElement.classList.contains('copy-button')) {
-            const codeData = buttonElement.getAttribute('data-code');
-            if (codeData) {
-                const decodedContent = atob(codeData);
-                copyCode(decodedContent, buttonElement as HTMLButtonElement);
-            }
-        }
+                 if (buttonElement && buttonElement.classList.contains('copy-button')) {
+             const codeData = buttonElement.getAttribute('data-code');
+             if (codeData) {
+                 try {
+                     const decodedContent = atob(codeData);
+                     copyCode(decodedContent, buttonElement as HTMLButtonElement);
+                 } catch (error) {
+                     console.error('Error decoding base64 data:', error);
+                 }
+             }
+         }
     }
 
-    // Update content when it changes
-    $: if (container && content) {
-        container.innerHTML = renderMarkdown(content);
-        // Use setTimeout to ensure DOM is updated
-        setTimeout(() => {
-            setupCopyButtons();
-        }, 0);
-    }
+         // Update content when it changes
+     $: if (container && content) {
+         // Prevent infinite re-renders by checking if content actually changed
+         const currentContent = container.getAttribute('data-content');
+         if (currentContent !== content) {
+             container.setAttribute('data-content', content);
+             renderMarkdown(content).then(html => {
+                 if (container) { // Check if container still exists
+                     container.innerHTML = html;
+                     // Use setTimeout to ensure DOM is updated
+                     setTimeout(() => {
+                         if (container) { // Double check
+                             setupCopyButtons();
+                         }
+                     }, 0);
+                 }
+             }).catch(error => {
+                 console.error('Error rendering markdown:', error);
+                 if (container) {
+                     container.innerHTML = `<p class="text-red-500">Error rendering content: ${error.message}</p>`;
+                 }
+             });
+         }
+     }
 
-    onMount(() => {
+    onMount(async () => {
         // Initial setup
         if (container) {
             setupCopyButtons();
@@ -166,9 +240,13 @@
     class="markdown-content {className}"
     class:prose={!className.includes('prose')}
     class:prose-invert={!className.includes('prose-invert')}
+    data-content=""
 >
     {#if !content}
         <span class="text-gray-400">No content</span>
+    {:else}
+        <!-- Fallback content while markdown is being rendered -->
+        <div class="text-gray-600 dark:text-gray-300 whitespace-pre-wrap">{content}</div>
     {/if}
 </div>
 
@@ -272,30 +350,48 @@
         margin: 0.5rem 0;
     }
 
+    .markdown-content :global(.code-header) {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0.75rem;
+        background-color: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+        border-top-left-radius: 0.5rem;
+        border-top-right-radius: 0.5rem;
+        font-size: 0.75rem;
+        color: #475569;
+        font-weight: 600;
+    }
+
+    .markdown-content :global(.language-label) {
+        text-transform: uppercase;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+        letter-spacing: 0.05em;
+    }
+
     .markdown-content :global(.copy-button) {
-        position: absolute;
-        top: 0.5rem;
-        right: 0.5rem;
         background-color: rgba(255, 255, 255, 0.9);
         border: 1px solid rgba(226, 232, 240, 0.8);
         color: #64748b;
-        padding: 0.5rem;
+        padding: 0.25rem;
         border-radius: 0.25rem;
         cursor: pointer;
         transition: all 0.2s ease;
-        z-index: 10;
-        opacity: 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        min-width: 2rem;
-        min-height: 2rem;
+        min-width: 1.5rem;
+        min-height: 1.5rem;
         user-select: none;
         backdrop-filter: blur(4px);
     }
 
     .markdown-content :global(.code-block-wrapper:hover .copy-button) {
-        opacity: 1;
+        background-color: rgba(255, 255, 255, 1);
+        color: #475569;
+        border-color: rgba(203, 213, 225, 1);
+        box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
     }
 
     .markdown-content :global(.copy-button:hover) {
@@ -303,6 +399,7 @@
         color: #475569;
         border-color: rgba(203, 213, 225, 1);
         box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+        transform: scale(1.05);
     }
 
     .markdown-content :global(.copy-icon) {
@@ -375,6 +472,12 @@
         color: #f9fafb;
     }
 
+    .prose-invert .markdown-content :global(.code-header) {
+        background-color: #1f2937;
+        border-bottom-color: #374151;
+        color: #9ca3af;
+    }
+
     .prose-invert .markdown-content :global(.copy-button) {
         background-color: rgba(17, 24, 39, 0.8);
         border-color: rgba(75, 85, 99, 0.3);
@@ -385,6 +488,7 @@
         background-color: rgba(31, 41, 55, 0.9);
         color: #f9fafb;
         border-color: rgba(75, 85, 99, 0.5);
+        transform: scale(1.05);
     }
 
     .prose-invert .markdown-content :global(th) {

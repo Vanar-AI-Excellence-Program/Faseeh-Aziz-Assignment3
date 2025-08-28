@@ -1,7 +1,20 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import MarkdownRenderer from './MarkdownRenderer.svelte';
+  import CitationDisplay from './CitationDisplay.svelte';
 
-  type Message = { id: string; role: 'user' | 'assistant'; content: string };
+  type Message = { 
+    id: string; 
+    role: 'user' | 'assistant'; 
+    content: string;
+    citations?: Array<{
+      documentId: string;
+      documentName: string;
+      chunkIndex: number;
+      text: string;
+      similarity: number;
+    }>;
+  };
 
   export let title: string = 'AI Assistant';
   export let placeholder: string = 'Ask me anything...';
@@ -61,7 +74,7 @@
       const assistantId = crypto.randomUUID();
       messages = [
         ...messages,
-        { id: assistantId, role: 'assistant', content: '' }
+        { id: assistantId, role: 'assistant', content: '', citations: [] }
       ];
 
       if (reader) {
@@ -84,6 +97,22 @@
                     ? { ...m, content: assistantText }
                     : m
                 );
+              }
+            }
+            
+            // Handle citations metadata
+            if (line.startsWith('1:')) {
+              try {
+                const metadata = JSON.parse(line.substring(2));
+                if (metadata.citations) {
+                  messages = messages.map(m => 
+                    m.id === assistantId 
+                      ? { ...m, citations: metadata.citations }
+                      : m
+                  );
+                }
+              } catch (_) {
+                // ignore malformed citations
               }
             }
           }
@@ -139,9 +168,20 @@
 
       {#each messages as m}
         <div class={m.role === 'user' ? 'text-right' : 'text-left'}>
-          <div class={m.role === 'user' ? 'inline-block rounded-lg bg-indigo-600 text-white px-3 py-2 text-sm whitespace-pre-wrap' : 'inline-block rounded-lg bg-gray-100 text-gray-800 px-3 py-2 text-sm whitespace-pre-wrap'}>
-            {m.content.replace(/\\n/g, '\n')}
-          </div>
+          {#if m.role === 'user'}
+            <div class="inline-block rounded-lg bg-indigo-600 text-white px-3 py-2 text-sm whitespace-pre-wrap">
+              {m.content.replace(/\\n/g, '\n')}
+            </div>
+          {:else}
+            <div class="inline-block rounded-lg bg-gray-100 text-gray-800 px-3 py-2 text-sm max-w-full">
+              <MarkdownRenderer content={m.content} />
+              {#if m.citations && m.citations.length > 0}
+                <div class="mt-2">
+                  <CitationDisplay citations={m.citations} />
+                </div>
+              {/if}
+            </div>
+          {/if}
         </div>
       {/each}
     </div>
