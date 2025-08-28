@@ -1,0 +1,765 @@
+<script lang="ts">
+  import { onMount, afterUpdate } from 'svelte';
+  import { browser } from '$app/environment';
+  import { page } from '$app/stores';
+  import { fly, fade, scale } from 'svelte/transition';
+  import MarkdownRenderer from '$lib/components/MarkdownRenderer.svelte';
+  import CitationDisplay from '$lib/components/CitationDisplay.svelte';
+  import type { ChatMessage, ChatHistory, Branch, MessageBranch, BranchData } from '$lib/types/chat';
+
+  export let data: {
+    user: { id: string; name?: string | null; email?: string | null; role?: string | null };
+    chats: any[];
+    messages: any[];
+  };
+
+  type Message = { 
+    id: string; 
+    role: 'user' | 'assistant'; 
+    content: string; 
+    timestamp: Date; 
+    parentId?: string | null;
+    citations?: Array<{
+      documentId: string;
+      documentName: string;
+      chunkIndex: number;
+      text: string;
+      similarity: number;
+    }>;
+  };
+  type Chat = { id: string; title: string; messages: Message[]; createdAt: Date };
+
+  let chats: Chat[] = [];
+  let activeChat: Chat | null = null;
+  let input = '';
+  let loading = false;
+  let error: string | null = null;
+  let abortController: AbortController | null = null;
+
+  let replyToMessageId: string | null = null;
+  let renamingChatId: string | null = null;
+  let renameInput = '';
+  let fileInput: HTMLInputElement;
+  let uploadedFile: File | null = null;
+  $: replyToMessage = activeChat?.messages.find((m) => m.id === replyToMessageId) || null;
+
+  // Branch state variables
+  let currentBranchId = 'main';
+  let availableBranches: Array<{id: string, name: string, messageCount: number, parentBranchId?: string}> = [];
+  let currentBranchIndex = 0;
+  let messagesWithBranches: Map<string, number> = new Map();
+  let branchData: Map<string, ChatMessage[]> = new Map();
+  let messageBranchIndices: Map<string, number> = new Map();
+  let editingMessageId: string | null = null;
+  let editingText = '';
+  let originalMessageContent: Map<string, string> = new Map();
+
+  // Auto-scroll to bottom
+  let messagesContainer: HTMLDivElement;
+
+  onMount(async () => {
+    console.log('Chat page onMount started');
+    console.log('Initial data:', data);
+    
+    try {
+      if (data.chats && data.chats.length > 0) {
+        console.log('Found existing chats:', data.chats.length);
+        chats = data.chats.map((chat: any) => ({
+          id: chat.id,
+          title: chat.title,
+          createdAt: new Date(chat.createdAt),
+          messages: []
+        }));
+        
+        const firstChat = chats[0];
+        console.log('Setting first chat as active:', firstChat);
+        await selectChat(firstChat);
+      } else {
+        console.log('No existing chats found, creating new chat');
+        createNewChat();
+      }
+    } catch (error) {
+      console.error('Error in onMount:', error);
+      createNewChat();
+    }
+  });
+
+  async function createNewChat() {
+    const newChat: Chat = {
+      id: crypto.randomUUID(),
+      title: 'New Chat',
+      messages: [],
+      createdAt: new Date()
+    };
+    chats = [newChat, ...chats];
+    activeChat = newChat;
+    
+    try {
+      await fetch('/api/chat/create', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: newChat.id, title: newChat.title })
+      });
+    } catch (error) {
+      console.error('Failed to create chat:', error);
+    }
+  }
+
+  async function selectChat(chat: Chat) {
+    console.log('selectChat called with:', chat);
+    
+    try {
+      activeChat = null;
+      
+      setTimeout(async () => {
+        try {
+          console.log('Loading messages for chat:', chat.id);
+          
+          const response = await fetch(`/api/chat/messages?conversationId=${chat.id}`);
+          console.log('API response status:', response.status);
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log('API response data:', data);
+            
+            if (data.success) {
+              availableBranches = data.branches || [];
+              currentBranchId = data.currentBranchId || 'main';
+              
+              const currentBranchMessages = data.messages[currentBranchId] || [];
+              
+              console.log('Current branch messages:', {
+                branchId: currentBranchId,
+                messageCount: currentBranchMessages.length,
+                messageIds: currentBranchMessages.map(m => m.id)
+              });
+              
+              chat.messages = currentBranchMessages.map((msg: any) => ({
+                id: msg.id,
+                role: msg.role,
+                content: msg.content,
+                timestamp: new Date(msg.createdAt || msg.timestamp),
+                parentId: msg.parentId
+              }));
+              
+              console.log('Chat messages loaded:', {
+                messageCount: chat.messages.length,
+                messageIds: chat.messages.map(m => m.id)
+              });
+              
+              branchData.clear();
+              Object.keys(data.messages).forEach(branchId => {
+                branchData.set(branchId, data.messages[branchId].map((msg: any) => ({
+                  id: msg.id,
+                  role: msg.role,
+                  content: msg.content,
+                  timestamp: new Date(msg.createdAt || msg.timestamp),
+                  parentId: msg.parentId
+                })));
+              });
+              
+              messagesWithBranches.clear();
+              Object.keys(data.messages).forEach(branchId => {
+                if (data.messages[branchId].length > 0) {
+                  data.messages[branchId].forEach((msg: any) => {
+                    const currentCount = messagesWithBranches.get(msg.id) || 0;
+                    messagesWithBranches.set(msg.id, currentCount + 1);
+                  });
+                }
+              });
+              
+              console.log('Loaded chat with branch structure:', {
+                conversationId: chat.id,
+                branches: availableBranches.length,
+                currentBranch: currentBranchId,
+                messagesInCurrentBranch: chat.messages.length
+              });
+            } else {
+              console.log('API returned success: false');
+              chat.messages = [];
+              availableBranches = [];
+              currentBranchId = 'main';
+            }
+          } else {
+            console.error('Failed to load messages for chat:', chat.id, 'Status:', response.status);
+            chat.messages = [];
+            availableBranches = [];
+            currentBranchId = 'main';
+          }
+        } catch (error) {
+          console.error('Error loading messages:', error);
+          chat.messages = [];
+          availableBranches = [];
+          currentBranchId = 'main';
+        }
+        
+        activeChat = chat;
+        console.log('Active chat set to:', activeChat);
+        
+        scrollToBottom();
+      }, 0);
+      
+    } catch (error) {
+      console.error('Error in selectChat:', error);
+      activeChat = chat;
+    }
+  }
+
+  async function deleteChat(chatId: string) {
+    chats = chats.filter(c => c.id !== chatId);
+    if (activeChat?.id === chatId) {
+      activeChat = chats[0] || null;
+      if (!activeChat) {
+        createNewChat();
+      }
+    }
+    
+    try {
+      await fetch('/api/chat/delete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: chatId })
+      });
+    } catch (e) {
+      console.error('Failed to delete chat:', e);
+    }
+  }
+
+  async function sendMessage() {
+    const text = input.trim();
+    if (!text || loading || !activeChat) return;
+    
+    console.log('Sending message with text:', text);
+    
+    input = '';
+    error = null;
+
+    const userMsg: Message = { 
+      id: crypto.randomUUID(), 
+      role: 'user', 
+      content: text,
+      timestamp: new Date()
+    };
+
+    if (activeChat.messages.length === 0) {
+      activeChat.title = text.length > 50 ? text.substring(0, 50) + '...' : text;
+    }
+
+    const parentId = replyToMessageId ?? (activeChat.messages.length > 0 ? activeChat.messages[activeChat.messages.length - 1].id : null);
+
+    loading = true;
+    scrollToBottom();
+    
+    abortController = new AbortController();
+
+    try {
+      const branchMessages = (() => {
+        if (replyToMessageId) {
+          const byId = new Map(activeChat.messages.map((m) => [m.id, m] as const));
+          const chain: Message[] = [];
+          const visited = new Set<string>();
+          
+          let cur: Message | undefined = byId.get(replyToMessageId);
+          while (cur && !visited.has(cur.id)) {
+            chain.push(cur);
+            visited.add(cur.id);
+            if (cur.parentId) {
+              cur = byId.get(cur.parentId);
+            } else {
+              break;
+            }
+          }
+          
+          chain.reverse();
+          chain.push(userMsg);
+          
+          return chain.map(({ role, content, id }) => ({ role, content, id, chatId: activeChat.id }));
+        } else {
+          const allMessages = [...activeChat.messages, userMsg];
+          return allMessages.map(({ role, content, id }) => ({ role, content, id, chatId: activeChat.id }));
+        }
+      })();
+
+      const validBranchMessages = branchMessages.filter(msg => 
+        msg && 
+        typeof msg === 'object' && 
+        typeof msg.role === 'string' && 
+        ['user', 'assistant', 'system'].includes(msg.role) &&
+        typeof msg.content === 'string' && 
+        msg.content.trim().length > 0
+      );
+
+      if (validBranchMessages.length === 0) {
+        throw new Error('No valid messages to send');
+      }
+
+      const hasUserMessage = validBranchMessages.some(msg => msg.role === 'user');
+      if (!hasUserMessage) {
+        throw new Error('At least one user message is required');
+      }
+
+      const userMessageWithParent = { ...userMsg, parentId };
+      activeChat.messages = [...activeChat.messages, userMessageWithParent];
+      chats = chats.map(c => c.id === activeChat?.id ? activeChat : c);
+      
+      replyToMessageId = null;
+
+      const timeoutId = setTimeout(() => {
+        abortController.abort();
+      }, 30000);
+      
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          messages: validBranchMessages,
+          branchId: currentBranchId
+        }),
+        headers: { 'content-type': 'application/json' },
+        signal: abortController.signal
+      });
+      
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to get response');
+      }
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let assistantText = '';
+      
+      const assistantId = crypto.randomUUID();
+      const assistantMsg: Message = { 
+        id: assistantId, 
+        role: 'assistant', 
+        content: '',
+        timestamp: new Date(),
+        parentId: userMsg.id
+      };
+      
+      activeChat.messages = [...activeChat.messages, assistantMsg];
+      chats = chats.map(c => c.id === activeChat?.id ? activeChat : c);
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+          
+          for (const line of lines) {
+            const m = line.match(/^0:(.*)$/);
+            if (m) {
+              try {
+                const decoded = JSON.parse(m[1]);
+                assistantText += decoded;
+                activeChat.messages = activeChat.messages.map((msg) =>
+                  msg.id === assistantId ? { ...msg, content: assistantText } : msg
+                );
+                chats = chats.map((c) => (c.id === activeChat?.id ? activeChat : c));
+                scrollToBottom();
+              } catch (_) {
+                // ignore malformed lines
+              }
+            }
+            
+            const citationsMatch = line.match(/^1:(.*)$/);
+            if (citationsMatch) {
+              try {
+                const metadata = JSON.parse(citationsMatch[1]);
+                if (metadata.citations) {
+                  activeChat.messages = activeChat.messages.map((msg) =>
+                    msg.id === assistantId ? { ...msg, citations: metadata.citations } : msg
+                  );
+                  chats = chats.map((c) => (c.id === activeChat?.id ? activeChat : c));
+                }
+              } catch (_) {
+                // ignore malformed citations
+              }
+            }
+          }
+        }
+      }
+      
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+        console.log('Request was aborted by user');
+        error = null;
+      } else {
+        error = e?.message ?? 'Unknown error';
+      }
+    } finally {
+      loading = false;
+      abortController = null;
+    }
+  }
+
+  function scrollToBottom() {
+    setTimeout(() => {
+      if (messagesContainer) {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }
+    }, 10);
+  }
+
+  function stopResponse() {
+    if (abortController) {
+      abortController.abort();
+      abortController = null;
+    }
+    loading = false;
+    error = null;
+  }
+
+  let didInitialScroll = false;
+  afterUpdate(() => {
+    if (!didInitialScroll && activeChat && activeChat.messages.length > 0) {
+      scrollToBottom();
+      didInitialScroll = true;
+    }
+  });
+
+  function onKeyDown(e: KeyboardEvent) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  }
+
+  function setReplyTarget(id: string) {
+    replyToMessageId = id === replyToMessageId ? null : id;
+  }
+
+  function formatTime(date: Date) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function startRename(c: Chat) {
+    renamingChatId = c.id;
+    renameInput = c.title;
+  }
+
+  async function confirmRename(c: Chat) {
+    const title = renameInput.trim();
+    renamingChatId = null;
+    if (!title || c.title === title) return;
+
+    c.title = title;
+    chats = chats.map((x) => (x.id === c.id ? { ...x, title } : x));
+
+    try {
+      await fetch('/api/chat/rename', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: c.id, title })
+      });
+    } catch (e) {
+      console.error('Failed to rename chat:', e);
+    }
+  }
+
+  function messageHasBranches(messageId: string): boolean {
+    const hasBranches = messagesWithBranches.has(messageId);
+    const hasOriginalContent = originalMessageContent.has(messageId);
+    const isCurrentlyEditing = editingMessageId === messageId;
+    const shouldShowNavigation = hasBranches || hasOriginalContent || isCurrentlyEditing;
+    
+    console.log('Checking if message has branches:', messageId, 'Result:', shouldShowNavigation);
+    return shouldShowNavigation;
+  }
+
+  function getCurrentBranchIndexForMessage(messageId: string): number {
+    return messageBranchIndices.get(messageId) || 0;
+  }
+
+  function getTotalBranchesForMessage(messageId: string): number {
+    const hasOriginalContent = originalMessageContent.has(messageId);
+    if (hasOriginalContent) {
+      return 2; // Original + Edited
+    }
+    
+    const branchCount = messagesWithBranches.get(messageId) || 0;
+    return branchCount + 1;
+  }
+
+  async function copyMessage(content: string) {
+    try {
+      await navigator.clipboard.writeText(content);
+      console.log('Message copied to clipboard');
+    } catch (err) {
+      console.error('Failed to copy message:', err);
+      const textArea = document.createElement('textarea');
+      textArea.value = content;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+    }
+  }
+</script>
+
+<div class="flex bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 h-full">
+
+  <!-- Chat Sidebar -->
+  <div class="w-80 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-r border-gray-200 dark:border-gray-700 flex flex-col min-h-0" in:fly={{ x: -300, duration: 300 }}>
+    <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+      <div class="flex gap-2">
+        <button
+          onclick={createNewChat}
+          class="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl px-4 py-2 text-sm flex items-center justify-center gap-2 cursor-pointer hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+          </svg>
+          New Chat
+        </button>
+      </div>
+    </div>
+    
+    <div class="flex-1 overflow-y-auto p-2">
+      {#each chats as chat (chat.id)}
+        <div
+          class={`p-3 rounded-xl mb-2 cursor-pointer group relative w-full transition-all duration-200 ${
+            activeChat?.id === chat.id 
+              ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg scale-105' 
+              : 'hover:bg-gray-100 dark:hover:bg-gray-700 hover:scale-102'
+          }`}
+          onclick={() => selectChat(chat)}
+          role="button"
+          tabindex="0"
+          onkeydown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              selectChat(chat);
+            }
+          }}
+        >
+          {#if renamingChatId === chat.id}
+            <input
+              class="text-sm font-medium w-full bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-600 rounded-lg px-2 py-1 text-gray-900 dark:text-white"
+              bind:value={renameInput}
+              onkeydown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); confirmRename(chat); }
+                else if (e.key === 'Escape') { renamingChatId = null; }
+              }}
+              onblur={() => confirmRename(chat)}
+            />
+          {:else}
+            <div class="text-sm font-medium truncate">{chat.title}</div>
+          {/if}
+          <div class="text-xs opacity-70 mt-1">{chat.createdAt.toLocaleDateString()}</div>
+          <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+            <button
+              onclick={(e) => { e.stopPropagation(); startRename(chat); }}
+              class="opacity-70 hover:opacity-100 text-xs cursor-pointer p-1 hover:bg-white/20 rounded transition-all duration-200"
+              aria-label="Rename chat"
+            >
+              ✎
+            </button>
+            <button
+              onclick={(e) => { e.stopPropagation(); deleteChat(chat.id); }}
+              class="opacity-70 hover:opacity-100 text-xs cursor-pointer p-1 hover:bg-red-500/20 rounded transition-all duration-200"
+              aria-label="Delete chat"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      {/each}
+    </div>
+  </div>
+
+  <!-- Main Chat Area -->
+  <div class="flex-1 flex flex-col min-h-0">
+    <!-- Header -->
+    <header class="border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm" in:fly={{ y: -20, duration: 300 }}>
+      <div class="flex items-center gap-3">
+        <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
+          {activeChat?.title || 'AI Assistant'}
+        </h1>
+        {#if currentBranchId !== 'main'}
+          <div class="flex items-center gap-2 px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+            <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 3v6a3 3 0 0 0 3 3h6"/>
+              <circle cx="6" cy="3" r="2"/>
+              <circle cx="18" cy="12" r="2"/>
+              <circle cx="6" cy="21" r="2"/>
+              <path d="M9 15a3 3 0 0 0-3 3v3"/>
+            </svg>
+            <span class="text-sm font-medium text-indigo-600 dark:text-indigo-400">
+              Branch: {availableBranches.find(b => b.id === currentBranchId)?.name || currentBranchId}
+            </span>
+          </div>
+        {/if}
+      </div>
+      <div class="text-sm text-gray-500 dark:text-gray-400">
+        Hello, {data.user?.name || 'User'}
+      </div>
+    </header>
+
+    <!-- Messages -->
+    <div bind:this={messagesContainer} class="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-transparent to-gray-50/50 dark:to-gray-800/50">
+      {#key activeChat?.id}
+        {#if !activeChat || activeChat.messages.length === 0}
+          <div class="text-center text-gray-500 dark:text-gray-400 mt-20" in:fade={{ duration: 400 }}>
+            <div class="text-6xl mb-4">💬</div>
+            <h2 class="text-2xl font-semibold mb-2 text-gray-700 dark:text-gray-300">Start a conversation</h2>
+            <p class="text-lg">Ask me anything about your app, or any general question!</p>
+          </div>
+        {:else}
+          {#each activeChat.messages.filter((msg, index, self) => index === self.findIndex(m => m.id === msg.id)) as message, i (`${activeChat.id}-${message.id}`)}
+            <div class={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`} in:fly={{ y: 20, duration: 300, delay: i * 50 }}>
+              <div class="max-w-3xl">
+                <div class="flex items-start gap-2">
+                  <!-- Fork button -->
+                  <button
+                    class="mt-1 text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 cursor-pointer transition-colors duration-200"
+                    title="Fork from this message"
+                    aria-label="Fork from this message"
+                    onclick={() => setReplyTarget(message.id)}
+                  >
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 3v6a3 3 0 0 0 3 3h6"/>
+                      <circle cx="6" cy="3" r="2"/>
+                      <circle cx="18" cy="12" r="2"/>
+                      <circle cx="6" cy="21" r="2"/>
+                      <path d="M9 15a3 3 0 0 0-3 3v3"/>
+                    </svg>
+                  </button>
+                  
+                  <!-- Message content -->
+                  <div class={`rounded-2xl px-6 py-4 shadow-lg transition-all duration-200 relative group ${
+                    message.role === 'user' 
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' 
+                      : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700'
+                  }`}>
+                    
+                    {#if message.role === 'assistant'}
+                      <div class="prose prose-sm max-w-none dark:prose-invert">
+                        <MarkdownRenderer content={message.content} className="prose-invert" />
+                      </div>
+                      {#if message.citations && message.citations.length > 0}
+                        <CitationDisplay citations={message.citations} />
+                      {/if}
+                    {:else}
+                      <div class="prose prose-sm max-w-none">
+                        <MarkdownRenderer content={message.content} />
+                      </div>
+                    {/if}
+                  </div>
+                </div>
+                
+                <!-- Action buttons below message -->
+                {#if message.role === 'user'}
+                  <div class="flex items-center justify-center gap-2 mt-2">
+                    <!-- Copy button -->
+                    <button
+                      class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer p-1 rounded transition-colors"
+                      title="Copy message"
+                      onclick={() => copyMessage(message.content)}
+                    >
+                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                    </button>
+                  </div>
+                {/if}
+                
+                <div class={`text-xs opacity-70 mt-2 ${message.role === 'user' ? 'text-right' : 'text-left'}`}>
+                  {formatTime(message.timestamp)}
+                </div>
+              </div>
+            </div>
+          {/each}
+        {/if}
+      {/key}
+      
+      {#if loading}
+        <div class="flex justify-start" in:scale={{ duration: 300 }}>
+          <div class="bg-white dark:bg-gray-800 rounded-2xl px-6 py-4 border border-gray-200 dark:border-gray-700 shadow-lg">
+            <div class="flex space-x-2">
+              <div class="w-3 h-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-bounce"></div>
+              <div class="w-3 h-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+              <div class="w-3 h-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+            </div>
+          </div>
+        </div>
+      {/if}
+    </div>
+
+    {#if error}
+      <div class="px-4 py-3 bg-red-50 dark:bg-red-900/20 border-t border-red-200 dark:border-red-800/30 text-red-700 dark:text-red-400 text-sm" in:fly={{ y: 20, duration: 300 }}>
+        {error}
+      </div>
+    {/if}
+
+    <!-- Input Area -->
+    <div class="border-t border-gray-200 dark:border-gray-700 p-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+      {#if replyToMessage}
+        <div class="mb-3 p-3 rounded-xl border border-indigo-200 dark:border-indigo-800/30 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-300 flex items-start justify-between gap-3" in:fly={{ y: -10, duration: 200 }}>
+          <div class="flex items-start gap-2">
+            <svg class="w-4 h-4 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 3v6a3 3 0 0 0 3 3h6"/>
+              <circle cx="6" cy="3" r="2"/>
+              <circle cx="18" cy="12" r="2"/>
+              <circle cx="6" cy="21" r="2"/>
+              <path d="M9 15a3 3 0 0 0-3 3v3"/>
+            </svg>
+            <div class="text-sm max-w-[80ch] truncate">
+              Replying to: {replyToMessage.content}
+            </div>
+          </div>
+          <button class="text-indigo-700 hover:text-indigo-900 dark:text-indigo-300 dark:hover:text-indigo-100 cursor-pointer transition-colors duration-200" aria-label="Cancel reply" title="Cancel reply" onclick={() => (replyToMessageId = null)}>
+            ✕
+          </button>
+        </div>
+      {/if}
+      
+      <div class="flex items-end gap-3">
+        <div class="flex-1">
+          <textarea
+            class="w-full resize-none rounded-2xl border border-gray-300 dark:border-gray-600 px-4 py-3 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-200"
+            rows="1"
+            placeholder="Type your message..."
+            bind:value={input}
+            onkeydown={onKeyDown}
+            style="min-height: 44px; max-height: 120px;"
+          ></textarea>
+        </div>
+        
+        <div class="flex gap-2">
+          <button
+            onclick={sendMessage}
+            disabled={loading || !input.trim()}
+            class="p-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-full hover:from-green-700 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
+            aria-label="Send message"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+            </svg>
+          </button>
+          {#if loading}
+            <button
+              onclick={stopResponse}
+              class="p-3 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-full hover:from-red-700 hover:to-pink-700 transition-all duration-200 cursor-pointer shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
+              aria-label="Stop response"
+              title="Stop response"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          {/if}
+        </div>
+      </div>
+      
+      <div class="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
+        Press Enter to send, Shift+Enter for new line
+      </div>
+    </div>
+  </div>
+</div>
+

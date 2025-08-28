@@ -149,3 +149,4 @@ JavaScript has several testing frameworks available:
 ### Conclusion
 
 JavaScript is a versatile language that continues to evolve. Understanding its core concepts and modern features is essential for web development. The language's flexibility and extensive ecosystem make it suitable for both frontend and backend development.
+

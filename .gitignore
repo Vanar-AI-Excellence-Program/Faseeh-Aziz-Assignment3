@@ -9,6 +9,8 @@
 env-variables.txt
 setup-env.bat
 setup-env.ps1
+.env.new
+.env.temp
 
 # Dependencies
 node_modules/

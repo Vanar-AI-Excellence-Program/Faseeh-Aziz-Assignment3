@@ -21,3 +21,4 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
     return json({ error: 'Failed to delete document' }, { status: 500 });
   }
 };
+

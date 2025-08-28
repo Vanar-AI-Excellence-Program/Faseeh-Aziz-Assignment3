@@ -1,22 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { ragService } from '$lib/server/rag';
-import { getServerSession } from '@auth/sveltekit';
-
-export const GET: RequestHandler = async ({ locals }) => {
-  try {
-    const session = await locals.auth();
-    if (!session?.user?.id) {
-      return json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const documents = await ragService.getUserDocuments(session.user.id);
-    return json({ success: true, documents });
-  } catch (error) {
-    console.error('Error fetching documents:', error);
-    return json({ error: 'Failed to fetch documents' }, { status: 500 });
-  }
-};
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   try {
@@ -81,13 +65,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     return json({ 
       success: true, 
+      message: 'Document ingested successfully',
       fileType: fileType,
       chunksInserted: result.chunksCreated,
+      documentId: result.documentId,
       ...result 
     });
   } catch (error) {
-    console.error('Error uploading document:', error);
-    return json({ error: 'Failed to upload document' }, { status: 500 });
+    console.error('Error ingesting document:', error);
+    return json({ error: 'Failed to ingest document' }, { status: 500 });
   }
 };
-

@@ -108,7 +108,7 @@
         >
           Choose File
         </button>
-        <p class="upload-hint">Supports .txt, .md, .json files</p>
+        <p class="upload-hint">Supports .txt files only</p>
       </div>
     {:else}
       <div class="file-selected" in:scale={{ duration: 300 }}>
@@ -178,7 +178,7 @@
     <input
       bind:this={fileInput}
       type="file"
-      accept=".txt,.md,.json"
+      accept=".txt"
       on:change={handleFileSelect}
       class="hidden"
     />
@@ -402,3 +402,4 @@
     display: none;
   }
 </style>
+

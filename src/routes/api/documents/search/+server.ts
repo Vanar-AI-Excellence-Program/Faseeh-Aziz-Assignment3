@@ -9,17 +9,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       return json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { query, limit = 5 } = await request.json();
+    const { query } = await request.json();
 
     if (!query) {
       return json({ error: 'Query is required' }, { status: 400 });
     }
 
-    const results = await ragService.searchChunks(session.user.id, query, limit);
+    const results = await ragService.searchDocuments(session.user.id, query);
     return json({ success: true, results });
   } catch (error) {
-    console.error('Error searching chunks:', error);
-    return json({ error: 'Failed to search chunks' }, { status: 500 });
+    console.error('Error searching documents:', error);
+    return json({ error: 'Failed to search documents' }, { status: 500 });
   }
 };
-

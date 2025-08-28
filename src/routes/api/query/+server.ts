@@ -16,10 +16,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     }
 
     const results = await ragService.searchChunks(session.user.id, query, limit);
-    return json({ success: true, results });
+    
+    // Format results for AI chat model context
+    const context = results.map((result, index) => ({
+      document: result.documentName,
+      content: result.text,
+      similarity: result.similarity,
+      metadata: result.metadata
+    }));
+
+    return json({ 
+      success: true, 
+      query,
+      results: context,
+      totalResults: results.length
+    });
   } catch (error) {
-    console.error('Error searching chunks:', error);
-    return json({ error: 'Failed to search chunks' }, { status: 500 });
+    console.error('Error querying RAG system:', error);
+    return json({ error: 'Failed to query RAG system' }, { status: 500 });
   }
 };
-

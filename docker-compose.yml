@@ -11,14 +11,19 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     command: postgres -c shared_preload_libraries=vector
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_chat_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   embedding-service:
     build: ./embedding-service
     restart: always
     ports:
-      - 8001:8000
+      - 8001:8001
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY}
     depends_on:
       - db
 
