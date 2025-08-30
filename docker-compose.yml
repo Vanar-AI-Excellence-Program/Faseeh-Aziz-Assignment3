@@ -1,14 +1,30 @@
 services:
   db:
-    image: postgres
+    image: ankane/pgvector:latest
     restart: always
     ports:
-      - 5432:5432
+      - 5433:5432
     environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
       POSTGRES_DB: local
     volumes:
       - pgdata:/var/lib/postgresql/data
+  
+  embedding-service:
+    build: ./embedding-service
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      AI_GATEWAY_API_KEY: ${AI_GATEWAY_API_KEY}
+      AI_GATEWAY_URL: ${AI_GATEWAY_URL}
+      VERCEL_PROJECT_ID: ${VERCEL_PROJECT_ID}
+      VERCEL_GATEWAY: ${VERCEL_GATEWAY}
+      VERCEL_API_KEY: ${VERCEL_API_KEY}
+      EMBEDDING_API_URL: ${EMBEDDING_API_URL}
+    depends_on:
+      - db
+
 volumes:
   pgdata:
