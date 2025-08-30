@@ -93,8 +93,8 @@ src/
 
 ### Prerequisites
 - Node.js 18+ 
-- PostgreSQL database
-- Docker (optional, for containerized setup)
+- **Docker (required)** - This project uses `ankane/pgvector:latest` image for vector similarity search
+- **pgvector-enabled PostgreSQL** - Plain PostgreSQL will not work, must use the provided Docker setup
 
 ### 1. Clone the Repository
 ```bash
