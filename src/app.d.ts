@@ -7,9 +7,18 @@ declare global {
 		// interface PageData {}
 		// interface PageState {}
 		// interface Platform {}
-		interface Locals {
-			auth(): Promise<import('@auth/core/types').Session | null>;
-		}
+			interface Locals {
+		auth(): Promise<import('@auth/core/types').Session | null>;
+	}
+
+	interface PageData {
+		form?: {
+			action?: string;
+			error?: boolean;
+			message?: string;
+			success?: boolean;
+		};
+	}
 	}
 }
 
