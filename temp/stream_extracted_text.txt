@@ -1,0 +1,1 @@
+Text patterns found: 1. Test PDF PDF Structure: - Contains 4 PDF objects - 2 page objects Readable text patterns: 1. Type 2. Catalog 3. Pages 4. endobj 5. Kids 6. Count 7. Page 8. Parent 9. MediaBox 10. Contents

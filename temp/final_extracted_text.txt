@@ -1,0 +1,1 @@
+PDF Document Information: ========================== Title: Untitled Document Author: Unknown Author Subject: No Subject Creator: pdf-lib (https://github.com/Hopding/pdf-lib) Producer: pdf-lib (https://github.com/Hopding/pdf-lib) Pages: 1 File Size: 511 bytes Page Details: Page 1: 612x792 points Analysis: Document appears to be properly structured.

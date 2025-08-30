@@ -1,0 +1,1 @@
+Extracted text patterns: 1. Test PDF Document contains 1 embedded streams. This suggests the PDF contains compressed or encoded content. Document contains 4 PDF objects.

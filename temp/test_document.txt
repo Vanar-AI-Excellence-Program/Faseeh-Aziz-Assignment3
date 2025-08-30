@@ -1,0 +1,27 @@
+
+Test Document for PDF Processing
+
+This is a test document created to demonstrate PDF text extraction capabilities.
+It contains actual readable text content that should be extractable by the PDF processors.
+
+Key Features:
+- Multiple paragraphs of text
+- Bullet points and lists
+- Different formatting elements
+- Numbers and special characters: 123, !@#$%^&*()
+- Technical terms: PDF, OCR, FlateDecode, compression
+
+This document is designed to test the enhanced PDF processor's ability to extract
+meaningful text content from PDF files. The processor should be able to identify
+and extract this text content for use in the RAG (Retrieval-Augmented Generation) system.
+
+Technical Information:
+- Document Type: Test PDF
+- Purpose: Demonstrate text extraction
+- Expected Result: Successful text extraction
+- Processing Method: Enhanced PDF Processor
+
+The enhanced PDF processor should successfully extract this content and provide
+it in a format suitable for generating embeddings and enabling AI-powered search
+and chat functionality.
+    

@@ -4,6 +4,45 @@ import { db } from '$lib/server/db';
 import { documents, chunks, embeddings } from '$lib/server/db/schema';
 import { env } from '$env/dynamic/private';
 import { eq, sql } from 'drizzle-orm';
+import { finalPDFProcessor } from '$lib/pdf-processor-final';
+
+// Extract text from PDF using the enhanced PDF processor
+async function extractTextFromPDF(buffer: Buffer): Promise<string> {
+  try {
+    console.log(`📄 Processing PDF with enhanced processor: ${buffer.length} bytes`);
+    
+    const result = await finalPDFProcessor.extractTextFromPDF(buffer);
+    
+    console.log(`✅ PDF processed successfully using ${result.method}`);
+    console.log(`📄 Extracted ${result.text.length} characters from ${result.pages} pages`);
+    
+    return result.text;
+    
+  } catch (error) {
+    console.error('PDF text extraction error:', error);
+    
+    // Provide more specific error messages
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    if (errorMessage.includes('Invalid PDF')) {
+      throw new Error('The file is not a valid PDF document');
+    } else if (errorMessage.includes('No text content')) {
+      throw new Error('PDF contains no extractable text (may be image-based)');
+    } else if (errorMessage.includes('password')) {
+      throw new Error('PDF is password protected and cannot be processed');
+    } else if (errorMessage.includes('corrupted')) {
+      throw new Error('PDF file appears to be corrupted');
+    } else if (errorMessage.includes('permission')) {
+      throw new Error('PDF access is restricted or requires permissions');
+    } else if (errorMessage.includes('All PDF extraction methods failed')) {
+      throw new Error('PDF could not be processed with any available method. The file may be corrupted, password-protected, or contain no extractable text.');
+    } else {
+      throw new Error(`Failed to parse PDF: ${errorMessage}`);
+    }
+  }
+}
+
+
 
 // Generate embeddings using Google Gemini directly
 async function generateEmbedding(text: string): Promise<{ embedding: number[] }> {
@@ -155,18 +194,48 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       return json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Check file type (only text files for now)
-    if (!file.type.startsWith('text/') && !file.name.endsWith('.txt')) {
-      return json({ error: 'Only text files are supported' }, { status: 400 });
+    // Check file type (text or PDF files)
+    if (!file.type.startsWith('text/') && !file.name.endsWith('.txt') && 
+        !file.type.startsWith('application/pdf') && !file.name.endsWith('.pdf')) {
+      return json({ error: 'Only text and PDF files are supported' }, { status: 400 });
     }
 
-    // Read file content
-    const text = await file.text();
+    // Read file content based on file type
+    let text = '';
+    let fileType = '';
+    
+    if (file.type.startsWith('text/') || file.name.endsWith('.txt')) {
+      // Handle text files
+      fileType = 'text';
+      text = await file.text();
+      console.log(`📄 Processing text file: ${file.name} (${text.length} characters)`);
+    } else if (file.type.startsWith('application/pdf') || file.name.endsWith('.pdf')) {
+      // Handle PDF files
+      fileType = 'pdf';
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        
+        // Log file details for debugging
+        console.log(`📄 Processing PDF file: ${file.name}`);
+        console.log(`📄 File size: ${file.size} bytes`);
+        console.log(`📄 Buffer size: ${buffer.length} bytes`);
+        
+        // Try primary PDF parsing method
+        text = await extractTextFromPDF(buffer);
+        console.log(`📄 Processing PDF file: ${file.name} (${text.length} characters extracted)`);
+      } catch (pdfError) {
+        console.error('PDF parsing error:', pdfError);
+        const errorMessage = pdfError instanceof Error ? pdfError.message : 'Unknown PDF parsing error';
+        return json({ 
+          error: `Failed to parse PDF file: ${errorMessage}. Please ensure it's a valid PDF with extractable text.` 
+        }, { status: 400 });
+      }
+    }
+
     if (!text.trim()) {
-      return json({ error: 'File is empty' }, { status: 400 });
+      return json({ error: 'File is empty or contains no extractable text' }, { status: 400 });
     }
-
-    console.log(`📄 Processing file: ${file.name} (${text.length} characters)`);
 
     // Check if document with same name already exists
     const existingDocument = await db.select().from(documents).where(eq(documents.name, file.name)).limit(1);
@@ -190,7 +259,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         originalSize: text.length,
         chunkCount: textChunks.length,
         uploadedAt: new Date().toISOString(),
-        fileType: file.type || 'text/plain'
+        fileType: file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'text/plain'),
+        isPDF: fileType === 'pdf',
+        processedFileType: fileType
       }
     }).returning();
 
@@ -207,7 +278,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
           metadata: {
             chunkIndex: index,
             chunkSize: chunkText.length,
-            estimatedTokens: Math.ceil(chunkText.length / 4) // Rough estimate
+            estimatedTokens: Math.ceil(chunkText.length / 4), // Rough estimate
+            sourceFileType: fileType
           }
         }).returning();
 
@@ -248,7 +320,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       totalChunks: textChunks.length,
       successfulChunks,
       failedChunks,
-      message: `Successfully ingested ${file.name} with ${successfulChunks} chunks`
+      fileType: fileType,
+      message: `Successfully ingested ${file.name} (${fileType.toUpperCase()}) with ${successfulChunks} chunks`
     });
 
   } catch (error) {

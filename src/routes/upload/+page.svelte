@@ -36,16 +36,31 @@
         return;
       }
 
-      // Validate each file
-      for (const file of newFiles) {
-        if (!file.type.startsWith('text/') && !file.name.endsWith('.txt')) {
-          error = 'Only text files (.txt) are supported';
-          return;
-        }
+             // Validate each file
+       for (const file of newFiles) {
+         if (!file.type.startsWith('text/') && !file.name.endsWith('.txt') && 
+             !file.type.startsWith('application/pdf') && !file.name.endsWith('.pdf')) {
+           error = 'Only text files (.txt) and PDF files (.pdf) are supported';
+           return;
+         }
         
         if (file.size > MAX_FILE_SIZE) {
           error = `File ${file.name} is too large. Maximum size is 10MB`;
           return;
+        }
+
+        // Additional validation for PDF files
+        if (file.name.toLowerCase().endsWith('.pdf')) {
+          if (file.size === 0) {
+            error = `File ${file.name} appears to be empty`;
+            return;
+          }
+          
+          // Check if file size is suspiciously small for a PDF
+          if (file.size < 100) {
+            error = `File ${file.name} is too small to be a valid PDF`;
+            return;
+          }
         }
       }
 
@@ -102,7 +117,18 @@
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(`Failed to upload ${file.name}: ${errorData.error || 'Upload failed'}`);
+          const errorMessage = errorData.error || 'Upload failed';
+          
+          // Provide more specific error messages for common issues
+          if (errorMessage.includes('Failed to parse PDF')) {
+            throw new Error(`❌ Failed to upload ${file.name}: ${errorMessage}. Please ensure the PDF contains extractable text and is not corrupted.`);
+          } else if (errorMessage.includes('already exists')) {
+            throw new Error(`❌ Failed to upload ${file.name}: A document with this name already exists. Please rename the file or delete the existing document.`);
+          } else if (errorMessage.includes('empty')) {
+            throw new Error(`❌ Failed to upload ${file.name}: The file appears to be empty.`);
+          } else {
+            throw new Error(`❌ Failed to upload ${file.name}: ${errorMessage}`);
+          }
         }
 
         const result = await response.json();
@@ -142,9 +168,9 @@
       <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">
         📄 Document Upload
       </h1>
-      <p class="text-lg text-gray-600 dark:text-gray-300">
-        Upload up to 5 text documents to enhance your AI chat experience with context-aware responses
-      </p>
+             <p class="text-lg text-gray-600 dark:text-gray-300">
+         Upload up to 5 text or PDF documents to enhance your AI chat experience with context-aware responses
+       </p>
     </div>
 
     <!-- Upload Section -->
@@ -156,17 +182,17 @@
 
         <!-- File Selection -->
         <div class="mb-6">
-          <label for="file" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Select Text Files (up to {MAX_FILES})
-          </label>
-          <input
-            bind:this={fileInput}
-            type="file"
-            id="file"
-            accept=".txt,text/*"
-            multiple
-            onchange={handleFileSelect}
-            class="block w-full text-sm text-gray-500 dark:text-gray-400
+                       <label for="file" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+               Select Files (up to {MAX_FILES})
+             </label>
+                           <input
+                   bind:this={fileInput}
+                   type="file"
+                   id="file"
+                   accept=".txt,.pdf,text/*,application/pdf"
+                   multiple
+                   onchange={handleFileSelect}
+                   class="block w-full text-sm text-gray-500 dark:text-gray-400
                    file:mr-4 file:py-2 file:px-4
                    file:rounded-full file:border-0
                    file:text-sm file:font-semibold
@@ -177,9 +203,9 @@
                    border border-gray-300 dark:border-gray-600 rounded-lg
                    bg-gray-50 dark:bg-gray-700"
           />
-          <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-            Only .txt files are supported. Maximum file size: 10MB per file. You can upload up to {MAX_FILES} files.
-          </p>
+                     <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+             Only .txt and .pdf files are supported. Maximum file size: 10MB per file. You can upload up to {MAX_FILES} files.
+           </p>
         </div>
 
         <!-- Selected Files List -->
@@ -265,14 +291,15 @@
               {#each uploadResults as result}
                 <div class="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                   <h4 class="font-medium text-green-900 dark:text-green-100">{result.fileName}</h4>
-                  <div class="text-xs text-green-800 dark:text-green-200 space-y-1 mt-1">
-                    <p><strong>Document ID:</strong> {result.documentId}</p>
-                    <p><strong>Total Chunks:</strong> {result.totalChunks}</p>
-                    <p><strong>Successful Chunks:</strong> {result.successfulChunks}</p>
-                    {#if result.failedChunks > 0}
-                      <p><strong>Failed Chunks:</strong> {result.failedChunks}</p>
-                    {/if}
-                  </div>
+                                     <div class="text-xs text-green-800 dark:text-green-200 space-y-1 mt-1">
+                     <p><strong>Document ID:</strong> {result.documentId}</p>
+                     <p><strong>File Type:</strong> {result.fileType === 'pdf' ? 'PDF' : 'Text'}</p>
+                     <p><strong>Total Chunks:</strong> {result.totalChunks}</p>
+                     <p><strong>Successful Chunks:</strong> {result.successfulChunks}</p>
+                     {#if result.failedChunks > 0}
+                       <p><strong>Failed Chunks:</strong> {result.failedChunks}</p>
+                     {/if}
+                   </div>
                 </div>
               {/each}
             </div>
@@ -286,10 +313,10 @@
           How It Works
         </h2>
         <div class="space-y-4 text-gray-600 dark:text-gray-300">
-          <div class="flex items-start gap-3">
-            <div class="w-6 h-6 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 text-sm font-semibold">1</div>
-            <p>Upload up to 5 text documents (.txt files only)</p>
-          </div>
+                     <div class="flex items-start gap-3">
+             <div class="w-6 h-6 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 text-sm font-semibold">1</div>
+             <p>Upload up to 5 text or PDF documents (.txt and .pdf files)</p>
+           </div>
           <div class="flex items-start gap-3">
             <div class="w-6 h-6 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 text-sm font-semibold">2</div>
             <p>Our system automatically processes and stores your documents for AI context</p>
@@ -302,6 +329,19 @@
             <div class="w-6 h-6 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 text-sm font-semibold">4</div>
             <p>Say "answer out of context" to get responses without using your documents</p>
           </div>
+        </div>
+      </div>
+
+      <!-- PDF Tips Section -->
+      <div class="mt-6 bg-blue-50 dark:bg-blue-900/20 rounded-2xl shadow-xl p-6 border border-blue-200 dark:border-blue-800">
+        <h3 class="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-3">
+          📄 PDF Upload Tips
+        </h3>
+        <div class="space-y-2 text-sm text-blue-800 dark:text-blue-200">
+          <p><strong>✅ Supported:</strong> PDFs with extractable text content</p>
+          <p><strong>❌ Not supported:</strong> Image-based PDFs, scanned documents, corrupted files</p>
+          <p><strong>💡 Tip:</strong> If your PDF upload fails, try converting it to text format or ensure it contains selectable text</p>
+          <p><strong>📏 Size limit:</strong> Maximum 10MB per file</p>
         </div>
       </div>
 

@@ -1,0 +1,1 @@
+PDF Structure Analysis: ====================== PDF Version: 1.4 File Size: 511 bytes PDF Structure: - Streams: 2 - Objects: 4 - End streams: 1 - End objects: 4 Text Patterns Found: 1 1. Test PDF Analysis: This appears to be a structured PDF with 4 objects and 2 data streams.
