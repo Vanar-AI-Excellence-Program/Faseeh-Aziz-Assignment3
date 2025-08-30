@@ -34,10 +34,13 @@
   const config = providerConfig[provider as keyof typeof providerConfig] || providerConfig.google;
 </script>
 
-<a 
-  href="/auth/{provider}?callbackUrl={callbackUrl}"
-  class="w-full flex items-center justify-center gap-3 px-4 py-2.5 border rounded-lg font-medium transition-all duration-200 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 {config.bgColor} {config.textColor} {config.borderColor} {config.hoverBgColor}"
->
-  {@html config.icon}
-  Continue with {config.name}
-</a>
+<form method="POST" action="/auth/signin/{provider}?callbackUrl={callbackUrl}" class="contents mb-4">
+  <button 
+    type="submit"
+    class="w-full flex items-center justify-center gap-3 px-4 py-2.5 border rounded-lg font-medium transition-all duration-200 shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 {config.bgColor} {config.textColor} {config.borderColor} {config.hoverBgColor}"
+    aria-label="Continue with {config.name}"
+  >
+    {@html config.icon}
+    Continue with {config.name}
+  </button>
+</form>

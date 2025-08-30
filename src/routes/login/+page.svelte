@@ -31,7 +31,7 @@
 		</div>
 		
 		<!-- Social Login Buttons -->
-		<div class="space-y-3 mb-6">
+		<div class="mb-6">
 			<SocialLoginButton provider="google" action="signin" callbackUrl="/post-auth" />
 			<SocialLoginButton provider="github" action="signin" callbackUrl="/post-auth" />
 		</div>
