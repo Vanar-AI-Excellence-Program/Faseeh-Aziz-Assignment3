@@ -1,0 +1,50 @@
+Copy these environment variables to a new file named ".env" in your project root:
+
+# AI Provider Configuration
+# Set one or both of these API keys to enable AI features
+OPENAI_API_KEY=your_openai_api_key_here
+GOOGLE_GENERATIVE_AI_API_KEY=your_google_ai_api_key_here
+
+# Database Configuration
+DATABASE_URL=postgresql://postgres:password@localhost:5433/auth_chat_db
+
+# Auth.js secret key
+AUTH_SECRET=your_auth_secret_here
+
+# Gmail SMTP Settings
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_app_password_here
+SMTP_FROM=your_email@gmail.com
+
+# Google OAuth
+AUTH_GOOGLE_ID=your_google_oauth_client_id_here
+AUTH_GOOGLE_SECRET=your_google_oauth_client_secret_here
+
+# GitHub OAuth
+AUTH_GITHUB_ID=your_github_oauth_client_id_here
+AUTH_GITHUB_SECRET=your_github_oauth_client_secret_here
+
+# Application URL
+AUTH_URL=http://localhost:5173
+
+# Python Embedding Service Configuration
+EMBEDDING_API_URL=http://localhost:8000/embed
+
+===========================================
+SETUP INSTRUCTIONS:
+===========================================
+
+1. Create a new file named ".env" in your project root
+2. Copy all the variables above into that file
+3. Replace placeholder values with your actual API keys and secrets
+4. Save the file
+5. Run: docker-compose up -d
+6. Run: pnpm install
+7. Run: pnpm db:push
+8. Run: pnpm dev
+
+Your app will be available at: http://localhost:5173
+Database will be available at: localhost:5433
+Redis will be available at: localhost:6379
