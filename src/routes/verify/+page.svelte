@@ -51,123 +51,157 @@
   }
 </script>
 
-<section class="mx-auto flex max-w-5xl justify-center px-4 py-16 md:px-6 lg:px-8 lg:py-20">
-  <div class="auth-container">
-    <div class="form-container sign-in-container">
-      <div class="auth-form">
-        <h1>Verify your email</h1>
-        <p class="mt-2 text-center text-gray-600">A verification code has been sent to {data.email}.</p>
-        
-        {#if data.sent === 0}
-          <div class="mt-3 rounded bg-yellow-50 border border-yellow-200 px-3 py-2 text-sm text-yellow-800">
-            We couldn't send the email right now, but you can still enter the code if you received it, or press "Resend code".
-          </div>
-        {/if}
+<svelte:head>
+  <title>Verify Email - User Portal</title>
+</svelte:head>
 
-        {#if $page.form?.error}
-          <div class="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
-            {$page.form.message}
-          </div>
-        {/if}
-
-        <form method="POST" action="?/verify" class="w-full contents" use:enhance>
-          <div class="w-full flex flex-col items-center">
-            <input type="hidden" name="email" value={data.email} />
-            <input 
-              class="auth-input" 
-              id="code" 
-              type="text" 
-              name="code" 
-              bind:value={code} 
-              placeholder="Enter 6-digit code" 
-              required 
-              minlength="6" 
-              maxlength="6" 
-              disabled={isExpired} 
-              bind:this={codeInput} 
-            />
-            <button class="auth-btn" type="submit" disabled={isExpired}>Verify Email</button>
-          </div>
-        </form>
-
-        <div class="mt-4 text-center text-sm text-gray-600">
-          {#if data.expiresAt}
-            <p>Code expires in {formatTime(timeRemaining)}</p>
-          {/if}
+<div class="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center px-4 py-8">
+  <div class="w-full max-w-md">
+    <!-- Main Card -->
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 border border-gray-200 dark:border-gray-700">
+      <!-- Header -->
+      <div class="text-center mb-8">
+        <div class="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg class="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
         </div>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+          Verify your email
+        </h1>
+        <p class="text-gray-600 dark:text-gray-300">
+          A verification code has been sent to <span class="font-medium text-gray-900 dark:text-white">{data.email}</span>
+        </p>
+      </div>
 
-        <form method="POST" action="?/resend" class="mt-4 text-center" on:submit|preventDefault={async (e) => {
-          const form = e.currentTarget as HTMLFormElement;
-          // Optimistically restart timer and enable input immediately
-          const optimisticExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-          restartTimer(optimisticExpiresAt);
-          code = '';
-          codeInput?.focus();
+      <!-- Alerts -->
+      {#if data.sent === 0}
+        <div class="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg">
+          <div class="flex items-center gap-3">
+            <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <p class="text-sm text-yellow-800 dark:text-yellow-200">
+              We couldn't send the email right now, but you can still enter the code if you received it, or press "Resend code".
+            </p>
+          </div>
+        </div>
+      {/if}
 
-          const res = await fetch(form.action, { method: 'POST', body: new FormData(form), headers: { 'accept': 'application/json' } });
-          if (res.ok) {
-            const payload = await res.json();
-            const expiresAt = payload?.expiresAt ?? payload?.data?.expiresAt;
-            if (expiresAt) {
-              restartTimer(expiresAt);
-            }
-          }
-        }}>
+      {#if $page.form?.error}
+        <div class="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg">
+          <div class="flex items-center gap-3">
+            <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p class="text-sm text-red-800 dark:text-red-200">
+              {$page.form.message}
+            </p>
+          </div>
+        </div>
+      {/if}
+
+      <!-- Verification Form -->
+      <form method="POST" action="?/verify" class="space-y-6" use:enhance>
+        <div>
           <input type="hidden" name="email" value={data.email} />
-          <button class="ghost" type="submit" disabled={!isExpired}>Resend Code</button>
-        </form>
-
-        <div class="mt-4">
-          <a href="/login" class="auth-form a">Back to Sign In</a>
+          <label for="code" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Verification Code
+          </label>
+          <input 
+            class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200" 
+            id="code" 
+            type="text" 
+            name="code" 
+            bind:value={code} 
+            placeholder="Enter 6-digit code" 
+            required 
+            minlength="6" 
+            maxlength="6" 
+            disabled={isExpired} 
+            bind:this={codeInput} 
+          />
         </div>
+
+        <button 
+          class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200" 
+          type="submit" 
+          disabled={isExpired}
+        >
+          Verify Email
+        </button>
+      </form>
+
+      <!-- Timer -->
+      {#if data.expiresAt}
+        <div class="mt-6 text-center">
+          <div class="inline-flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-full">
+            <svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Code expires in {formatTime(timeRemaining)}
+            </span>
+          </div>
+        </div>
+      {/if}
+
+      <!-- Resend Form -->
+      <form method="POST" action="?/resend" class="mt-6 text-center" on:submit|preventDefault={async (e) => {
+        const form = e.currentTarget as HTMLFormElement;
+        // Optimistically restart timer and enable input immediately
+        const optimisticExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+        restartTimer(optimisticExpiresAt);
+        code = '';
+        codeInput?.focus();
+
+        const res = await fetch(form.action, { method: 'POST', body: new FormData(form), headers: { 'accept': 'application/json' } });
+        if (res.ok) {
+          const payload = await res.json();
+          const expiresAt = payload?.expiresAt ?? payload?.data?.expiresAt;
+          if (expiresAt) {
+            restartTimer(expiresAt);
+          }
+        }
+      }}>
+        <input type="hidden" name="email" value={data.email} />
+        <button 
+          class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium text-sm disabled:text-gray-400 disabled:cursor-not-allowed transition-colors duration-200" 
+          type="submit" 
+          disabled={!isExpired}
+        >
+          Resend Code
+        </button>
+      </form>
+
+      <!-- Back Link -->
+      <div class="mt-8 text-center">
+        <a 
+          href="/login" 
+          class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-medium text-sm transition-colors duration-200"
+        >
+          ← Back to Sign In
+        </a>
       </div>
     </div>
 
-    <!-- Overlay -->
-    <div class="overlay-container">
-      <div class="overlay">
-        <div class="overlay-panel overlay-left">
-          <h1>Welcome Back!</h1>
-          <p>Please verify your email address to continue with your account</p>
-          <button class="ghost" type="button" on:click={() => window.history.back()}>Go Back</button>
+    <!-- Info Card -->
+    <div class="mt-6 bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-200 dark:border-gray-700">
+      <div class="text-center">
+        <div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
         </div>
-        <div class="overlay-panel overlay-right">
-          <h1>Email Verification</h1>
-          <p>Enter the 6-digit verification code sent to your email address to complete the verification process</p>
-        </div>
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          Email Verification
+        </h3>
+        <p class="text-gray-600 dark:text-gray-300 text-sm">
+          Enter the 6-digit verification code sent to your email address to complete the verification process and access your account.
+        </p>
       </div>
     </div>
   </div>
-</section>
-
-<style>
-/* Scoped auth styles (inspired by template) */
-:global(html,body){height:100%;overflow:hidden}
-:global(body){font-family:'Montserrat',sans-serif;margin:0}
-.auth-container{background:#fff;border-radius:12px;box-shadow:0 14px 28px rgba(0,0,0,0.25),0 10px 10px rgba(0,0,0,0.22);position:relative;overflow:hidden;width:950px;max-width:100%;min-height:520px;height:clamp(520px,78svh,680px)}
-.form-container{position:absolute;top:0;height:100%;transition:all .6s ease-in-out}
-.sign-in-container{left:0;width:50%;z-index:2}
-.overlay-container{position:absolute;top:0;left:50%;width:50%;height:100%;overflow:hidden;transition:transform .6s ease-in-out;z-index:100}
-.overlay{background:linear-gradient(to right,#00ABE4,#34c5f1);background-repeat:no-repeat;background-size:cover;background-position:0 0;color:#fff;position:relative;left:-100%;height:100%;width:200%;transform:translateX(0);transition:transform .6s ease-in-out}
-.overlay-panel{position:absolute;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:0 40px;text-align:center;top:0;height:100%;width:50%;transform:translateX(0);transition:transform .6s ease-in-out}
-.overlay-left{transform:translateX(-20%)}
-.overlay-right{right:0}
-.auth-form{background:#fff;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:0 56px;height:100%;text-align:center}
-.auth-input{background:#eee;border:none;padding:12px 15px;margin:10px 0;width:320px;max-width:100%}
-.auth-btn{border-radius:20px;border:1px solid #00ABE4;background:#00ABE4;color:#fff;font-size:13px;font-weight:700;padding:12px 45px;letter-spacing:1px;text-transform:uppercase;cursor:pointer}
-.auth-btn:disabled{opacity:0.6;cursor:not-allowed}
-.ghost{background:transparent;border:2px solid #00ABE4;color:#00ABE4;border-radius:9999px;padding:12px 28px;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.5px;transition:background .2s ease, transform .1s ease}
-.ghost:hover{background:#00ABE4;color:#fff}
-.ghost:active{transform:translateY(1px)}
-.ghost:disabled{opacity:0.6;cursor:not-allowed}
-.auth-form h1{font-weight:800;font-size:42px;line-height:1.1;margin-bottom:8px}
-.auth-form p{color:#666;margin-bottom:16px;max-width:300px}
-.auth-form a{color:#00ABE4;text-decoration:none;margin-top:16px}
-.auth-form a:hover{text-decoration:underline}
-/* Right gradient panel typography */
-.overlay-panel h1{font-weight:800;font-size:44px;line-height:1.1;margin:0 0 14px;color:#fff}
-.overlay-panel p{color:#fff;opacity:.95;max-width:420px;margin:0 0 24px;line-height:1.6}
-@media (max-width: 768px){.auth-container{width:100%;height:100svh;min-height:0;border-radius:0}.overlay-left,.overlay-right{display:none}.sign-in-container{width:100%}.auth-form{padding:0 24px}.auth-form h1{font-size:34px}}
-</style>
+</div>
 
 
